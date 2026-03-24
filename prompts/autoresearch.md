@@ -26,7 +26,6 @@ Ask the user where to run:
 - **New git branch** — create a branch so main stays clean
 - **Virtual environment** — create an isolated venv/conda env first
 - **Docker** — run experiment code inside an isolated Docker container
-- **Cloud** — delegate to a remote Agent Computer machine via `/delegate`
 
 Do not proceed without a clear answer.
 

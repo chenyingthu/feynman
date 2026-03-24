@@ -5,7 +5,8 @@ import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 
 import { getExtensionCommandSpec } from "../../metadata/commands.mjs";
-import { renderHtmlPreview, renderPdfPreview, openWithDefaultApp, pathExists, buildProjectAgentsTemplate, buildSessionLogsReadme } from "./preview.js";
+import { renderHtmlPreview, renderPdfPreview, openWithDefaultApp, pathExists } from "./preview.js";
+import { buildProjectAgentsTemplate, buildSessionLogsReadme } from "./project-scaffold.js";
 import { formatToolText } from "./shared.js";
 import { searchSessionTranscripts } from "./session-search.js";
 

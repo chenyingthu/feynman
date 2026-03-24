@@ -34,6 +34,16 @@ Derive a short slug from the topic (lowercase, hyphens, no filler words, ≤5 wo
 - [ ] Contradictions identified and addressed
 - [ ] No single-source claims on critical findings
 
+## Task Ledger
+| ID | Owner | Task | Status | Output |
+|---|---|---|---|---|
+| T1 | lead / researcher | ... | todo | ... |
+
+## Verification Log
+| Item | Method | Status | Evidence |
+|---|---|---|---|
+| Critical claim / computation / figure | source cross-read / rerun / direct fetch / code check | pending | path or URL |
+
 ## Decision Log
 (Updated as the workflow progresses)
 ```
@@ -60,6 +70,7 @@ Launch parallel `researcher` subagents via `subagent`. Each gets a structured br
 - **Output format:** numbered sources, evidence table, inline source references
 - **Tool guidance:** which search tools to prioritize
 - **Task boundaries:** what NOT to cover (another researcher handles that)
+- **Task IDs:** the specific ledger rows they own and must report back on
 
 Assign each researcher a clearly disjoint dimension — different source types, geographic scopes, time periods, or technical angles. Never duplicate coverage.
 
@@ -75,6 +86,7 @@ Assign each researcher a clearly disjoint dimension — different source types, 
 ```
 
 Researchers write full outputs to files and pass references back — do not have them return full content into your context.
+Researchers must not silently merge or skip assigned tasks. If something is impossible or redundant, mark the ledger row `blocked` or `superseded` with a note.
 
 ## 4. Evaluate and loop
 
@@ -83,10 +95,11 @@ After researchers return, read their output files and critically assess:
 - Which answers rest on only one source?
 - Are there contradictions needing resolution?
 - Is any key angle missing entirely?
+- Did every assigned ledger task actually get completed, blocked, or explicitly superseded?
 
 If gaps are significant, spawn another targeted batch of researchers. No fixed cap on rounds — iterate until evidence is sufficient or sources are exhausted.
 
-Update the plan artifact (`outputs/.plans/<slug>.md`) decision log after each round.
+Update the plan artifact (`outputs/.plans/<slug>.md`) task ledger, verification log, and decision log after each round.
 
 Most topics need 1-2 rounds. Stop when additional rounds would not materially change conclusions.
 
@@ -110,6 +123,12 @@ Unresolved issues, disagreements between sources, gaps in evidence.
 ```
 
 When the research includes quantitative data (benchmarks, performance comparisons, trends), generate charts using `pi-charts`. Use Mermaid diagrams for architectures and processes. Every visual must have a caption and reference the underlying data.
+
+Before finalizing the draft, do a claim sweep:
+- map each critical claim, number, and figure to its supporting source or artifact in the verification log
+- downgrade or remove anything that cannot be grounded
+- label inferences as inferences
+- if code or calculations were involved, record which checks were actually run and which remain unverified
 
 Save this draft to `outputs/.drafts/<slug>-draft.md`.
 
@@ -136,6 +155,7 @@ Spawn the `reviewer` agent against the cited draft. The reviewer checks for:
 ```
 
 If the reviewer flags FATAL issues, fix them in the brief before delivering. MAJOR issues get noted in the Open Questions section. MINOR issues are accepted.
+After fixes, run at least one more review-style verification pass if any FATAL issues were found. Do not assume one fix solved everything.
 
 ## 8. Deliver
 

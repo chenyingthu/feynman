@@ -69,7 +69,6 @@ Four bundled research agents, dispatched automatically or via subagent commands.
 
 - **[AlphaXiv](https://www.alphaxiv.org/)** — paper search, Q&A, code reading, persistent annotations
 - **Docker** — isolated container execution for safe experiments on your machine
-- **[Agent Computer](https://agentcomputer.ai)** — secure cloud execution for long-running research and GPU workloads
 - **Web search** — Gemini or Perplexity, zero-config default via signed-in Chromium
 - **Session search** — optional indexed recall across prior research sessions
 - **Preview** — browser and PDF export of generated artifacts
@@ -95,7 +94,7 @@ feynman search status               # web search config
 
 ## How it works
 
-Built on [Pi](https://github.com/badlogic/pi-mono) for the agent runtime, [alphaXiv](https://www.alphaxiv.org/) for paper search and analysis, [Docker](https://www.docker.com/) for isolated local execution, and [Agent Computer](https://agentcomputer.ai) for secure cloud workloads
+Built on [Pi](https://github.com/badlogic/pi-mono) for the agent runtime, [alphaXiv](https://www.alphaxiv.org/) for paper search and analysis, and [Docker](https://www.docker.com/) for isolated local execution
 
 Every output is source-grounded — claims link to papers, docs, or repos with direct URLs
 
