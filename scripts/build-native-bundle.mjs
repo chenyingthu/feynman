@@ -6,6 +6,7 @@ import { spawnSync } from "node:child_process";
 const appRoot = resolve(import.meta.dirname, "..");
 const packageJson = JSON.parse(readFileSync(resolve(appRoot, "package.json"), "utf8"));
 const packageLockPath = resolve(appRoot, "package-lock.json");
+const rootNodeModulesPath = resolve(appRoot, "node_modules");
 const bundledNodeVersion = process.env.FEYNMAN_BUNDLED_NODE_VERSION ?? process.version.slice(1);
 
 function fail(message) {
@@ -118,6 +119,18 @@ function copyPackageFiles(appDir) {
 	}
 
 	cpSync(packageLockPath, resolve(appDir, "package-lock.json"));
+}
+
+function installAppDependencies(appDir) {
+	if (existsSync(rootNodeModulesPath)) {
+		cpSync(rootNodeModulesPath, resolve(appDir, "node_modules"), { recursive: true });
+		run("npm", ["prune", "--omit=dev", "--ignore-scripts", "--no-audit", "--no-fund", "--loglevel", "error"], {
+			cwd: appDir,
+		});
+		return;
+	}
+
+	run("npm", ["ci", "--omit=dev", "--ignore-scripts", "--no-audit", "--no-fund", "--loglevel", "error"], { cwd: appDir });
 }
 
 function extractTarball(archivePath, destination, compressionFlag) {
@@ -253,7 +266,7 @@ function main() {
 
 	ensureBundledWorkspace();
 	copyPackageFiles(appDir);
-	run("npm", ["ci", "--omit=dev", "--ignore-scripts", "--no-audit", "--no-fund", "--loglevel", "error"], { cwd: appDir });
+	installAppDependencies(appDir);
 
 	const appFeynmanDir = resolve(appDir, ".feynman");
 	extractTarball(resolve(appFeynmanDir, "runtime-workspace.tgz"), appFeynmanDir, "-xzf");
