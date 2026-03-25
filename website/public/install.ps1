@@ -1,22 +1,75 @@
 param(
-  [string]$Version = "latest"
+  [string]$Version = "edge"
 )
 
 $ErrorActionPreference = "Stop"
 
-function Resolve-Version {
+function Normalize-Version {
   param([string]$RequestedVersion)
 
-  if ($RequestedVersion -and $RequestedVersion -ne "latest") {
-    return $RequestedVersion.TrimStart("v")
+  if (-not $RequestedVersion) {
+    return "edge"
   }
 
-  $release = Invoke-RestMethod -Uri "https://api.github.com/repos/getcompanion-ai/feynman/releases/latest"
-  if (-not $release.tag_name) {
-    throw "Failed to resolve the latest Feynman release version."
+  switch ($RequestedVersion.ToLowerInvariant()) {
+    "edge" { return "edge" }
+    "latest" { return "latest" }
+    "stable" { return "latest" }
+    default { return $RequestedVersion.TrimStart("v") }
+  }
+}
+
+function Resolve-ReleaseMetadata {
+  param(
+    [string]$RequestedVersion,
+    [string]$AssetTarget,
+    [string]$BundleExtension
+  )
+
+  $normalizedVersion = Normalize-Version -RequestedVersion $RequestedVersion
+
+  if ($normalizedVersion -eq "edge") {
+    $release = Invoke-RestMethod -Uri "https://api.github.com/repos/getcompanion-ai/feynman/releases/tags/edge"
+    $asset = $release.assets | Where-Object { $_.name -like "feynman-*-$AssetTarget.$BundleExtension" } | Select-Object -First 1
+    if (-not $asset) {
+      throw "Failed to resolve the latest Feynman edge bundle."
+    }
+
+    $archiveName = $asset.name
+    $suffix = ".$BundleExtension"
+    $bundleName = $archiveName.Substring(0, $archiveName.Length - $suffix.Length)
+    $resolvedVersion = $bundleName.Substring("feynman-".Length)
+    $resolvedVersion = $resolvedVersion.Substring(0, $resolvedVersion.Length - ("-$AssetTarget").Length)
+
+    return [PSCustomObject]@{
+      ResolvedVersion = $resolvedVersion
+      BundleName = $bundleName
+      ArchiveName = $archiveName
+      DownloadUrl = $asset.browser_download_url
+    }
   }
 
-  return $release.tag_name.TrimStart("v")
+  if ($normalizedVersion -eq "latest") {
+    $release = Invoke-RestMethod -Uri "https://api.github.com/repos/getcompanion-ai/feynman/releases/latest"
+    if (-not $release.tag_name) {
+      throw "Failed to resolve the latest Feynman release version."
+    }
+
+    $resolvedVersion = $release.tag_name.TrimStart("v")
+  } else {
+    $resolvedVersion = $normalizedVersion
+  }
+
+  $bundleName = "feynman-$resolvedVersion-$AssetTarget"
+  $archiveName = "$bundleName.$BundleExtension"
+  $baseUrl = if ($env:FEYNMAN_INSTALL_BASE_URL) { $env:FEYNMAN_INSTALL_BASE_URL } else { "https://github.com/getcompanion-ai/feynman/releases/download/v$resolvedVersion" }
+
+  return [PSCustomObject]@{
+    ResolvedVersion = $resolvedVersion
+    BundleName = $bundleName
+    ArchiveName = $archiveName
+    DownloadUrl = "$baseUrl/$archiveName"
+  }
 }
 
 function Get-ArchSuffix {
@@ -28,12 +81,13 @@ function Get-ArchSuffix {
   }
 }
 
-$resolvedVersion = Resolve-Version -RequestedVersion $Version
 $archSuffix = Get-ArchSuffix
-$bundleName = "feynman-$resolvedVersion-win32-$archSuffix"
-$archiveName = "$bundleName.zip"
-$baseUrl = if ($env:FEYNMAN_INSTALL_BASE_URL) { $env:FEYNMAN_INSTALL_BASE_URL } else { "https://github.com/getcompanion-ai/feynman/releases/download/v$resolvedVersion" }
-$downloadUrl = "$baseUrl/$archiveName"
+$assetTarget = "win32-$archSuffix"
+$release = Resolve-ReleaseMetadata -RequestedVersion $Version -AssetTarget $assetTarget -BundleExtension "zip"
+$resolvedVersion = $release.ResolvedVersion
+$bundleName = $release.BundleName
+$archiveName = $release.ArchiveName
+$downloadUrl = $release.DownloadUrl
 
 $installRoot = Join-Path $env:LOCALAPPDATA "Programs\feynman"
 $installBinDir = Join-Path $installRoot "bin"

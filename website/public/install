@@ -2,7 +2,7 @@
 
 set -eu
 
-VERSION="${1:-latest}"
+VERSION="${1:-edge}"
 INSTALL_BIN_DIR="${FEYNMAN_INSTALL_BIN_DIR:-$HOME/.local/bin}"
 INSTALL_APP_DIR="${FEYNMAN_INSTALL_APP_DIR:-$HOME/.local/share/feynman}"
 SKIP_PATH_UPDATE="${FEYNMAN_INSTALL_SKIP_PATH_UPDATE:-0}"
@@ -54,7 +54,10 @@ run_with_spinner() {
 
 normalize_version() {
   case "$1" in
-    "" | latest)
+    "" | edge)
+      printf 'edge\n'
+      ;;
+    latest | stable)
       printf 'latest\n'
       ;;
     v*)
@@ -157,23 +160,53 @@ require_command() {
   fi
 }
 
-resolve_version() {
+resolve_release_metadata() {
   normalized_version="$(normalize_version "$VERSION")"
 
-  if [ "$normalized_version" != "latest" ]; then
-    printf '%s\n' "$normalized_version"
+  if [ "$normalized_version" = "edge" ]; then
+    release_json="$(download_text "https://api.github.com/repos/getcompanion-ai/feynman/releases/tags/edge")"
+    asset_url=""
+
+    for candidate in $(printf '%s\n' "$release_json" | sed -n 's/.*"browser_download_url":[[:space:]]*"\([^"]*\)".*/\1/p'); do
+      case "$candidate" in
+        */feynman-*-${asset_target}.${archive_extension})
+          asset_url="$candidate"
+          break
+          ;;
+      esac
+    done
+
+    if [ -z "$asset_url" ]; then
+      echo "Failed to resolve the latest Feynman edge bundle." >&2
+      exit 1
+    fi
+
+    archive_name="${asset_url##*/}"
+    bundle_name="${archive_name%.$archive_extension}"
+    resolved_version="${bundle_name#feynman-}"
+    resolved_version="${resolved_version%-${asset_target}}"
+
+    printf '%s\n%s\n%s\n%s\n' "$resolved_version" "$bundle_name" "$archive_name" "$asset_url"
     return
   fi
 
-  release_json="$(download_text "https://api.github.com/repos/getcompanion-ai/feynman/releases/latest")"
-  resolved="$(printf '%s\n' "$release_json" | sed -n 's/.*"tag_name":[[:space:]]*"v\([^"]*\)".*/\1/p' | head -n 1)"
+  if [ "$normalized_version" = "latest" ]; then
+    release_json="$(download_text "https://api.github.com/repos/getcompanion-ai/feynman/releases/latest")"
+    resolved_version="$(printf '%s\n' "$release_json" | sed -n 's/.*"tag_name":[[:space:]]*"v\([^"]*\)".*/\1/p' | head -n 1)"
 
-  if [ -z "$resolved" ]; then
-    echo "Failed to resolve the latest Feynman release version." >&2
-    exit 1
+    if [ -z "$resolved_version" ]; then
+      echo "Failed to resolve the latest Feynman release version." >&2
+      exit 1
+    fi
+  else
+    resolved_version="$normalized_version"
   fi
 
-  printf '%s\n' "$resolved"
+  bundle_name="feynman-${resolved_version}-${asset_target}"
+  archive_name="${bundle_name}.${archive_extension}"
+  download_url="${FEYNMAN_INSTALL_BASE_URL:-https://github.com/getcompanion-ai/feynman/releases/download/v${resolved_version}}/${archive_name}"
+
+  printf '%s\n%s\n%s\n%s\n' "$resolved_version" "$bundle_name" "$archive_name" "$download_url"
 }
 
 case "$(uname -s)" in
@@ -205,12 +238,13 @@ esac
 require_command mktemp
 require_command tar
 
-resolved_version="$(resolve_version)"
 asset_target="$os-$arch"
-bundle_name="feynman-${resolved_version}-${asset_target}"
-archive_name="${bundle_name}.tar.gz"
-base_url="${FEYNMAN_INSTALL_BASE_URL:-https://github.com/getcompanion-ai/feynman/releases/download/v${resolved_version}}"
-download_url="${base_url}/${archive_name}"
+archive_extension="tar.gz"
+release_metadata="$(resolve_release_metadata)"
+resolved_version="$(printf '%s\n' "$release_metadata" | sed -n '1p')"
+bundle_name="$(printf '%s\n' "$release_metadata" | sed -n '2p')"
+archive_name="$(printf '%s\n' "$release_metadata" | sed -n '3p')"
+download_url="$(printf '%s\n' "$release_metadata" | sed -n '4p')"
 
 step "Installing Feynman ${resolved_version} for ${asset_target}"
 

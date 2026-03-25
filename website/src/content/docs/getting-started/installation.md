@@ -17,6 +17,8 @@ curl -fsSL https://feynman.is/install | bash
 
 The installer detects your OS and architecture automatically. On macOS it supports both Intel and Apple Silicon. On Linux it supports x64 and arm64. The launcher is installed to `~/.local/bin`, the bundled runtime is unpacked into `~/.local/share/feynman`, and your `PATH` is updated when needed.
 
+By default, the one-line installer tracks the rolling `edge` channel from `main`.
+
 On **Windows**, open PowerShell as Administrator and run:
 
 ```powershell
@@ -24,6 +26,22 @@ irm https://feynman.is/install.ps1 | iex
 ```
 
 This installs the Windows runtime bundle under `%LOCALAPPDATA%\Programs\feynman`, adds its launcher to your user `PATH`, and lets you re-run the installer at any time to update.
+
+## Stable or pinned releases
+
+If you want the latest tagged release instead of the rolling `edge` channel:
+
+```bash
+curl -fsSL https://feynman.is/install | bash -s -- stable
+```
+
+On Windows:
+
+```powershell
+& ([scriptblock]::Create((irm https://feynman.is/install.ps1))) -Version stable
+```
+
+You can also pin an exact version by replacing `stable` with a version such as `0.2.13`.
 
 ## pnpm
 

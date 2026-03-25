@@ -14,7 +14,6 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
       should_publish: ${{ steps.version.outputs.should_publish }}
-      should_build_release: ${{ steps.version.outputs.should_build_release }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v5
@@ -28,46 +27,31 @@ jobs:
           echo "version=$LOCAL" >> "$GITHUB_OUTPUT"
           if [ "$CURRENT" != "$LOCAL" ]; then
             echo "should_publish=true" >> "$GITHUB_OUTPUT"
-            echo "should_build_release=true" >> "$GITHUB_OUTPUT"
-          elif [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
-            echo "should_publish=false" >> "$GITHUB_OUTPUT"
-            echo "should_build_release=true" >> "$GITHUB_OUTPUT"
           else
             echo "should_publish=false" >> "$GITHUB_OUTPUT"
-            echo "should_build_release=false" >> "$GITHUB_OUTPUT"
           fi
 
   publish-npm:
     needs: version-check
-    if: needs.version-check.outputs.should_build_release == 'true'
+    if: needs.version-check.outputs.should_publish == 'true'
     runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
       contents: read
     steps:
-      - name: Skip npm publish
-        if: needs.version-check.outputs.should_publish != 'true'
-        run: echo "Skipping npm publish; version ${{ needs.version-check.outputs.version }} is already on npm."
       - uses: actions/checkout@v6
-        if: needs.version-check.outputs.should_publish == 'true'
       - uses: actions/setup-node@v5
-        if: needs.version-check.outputs.should_publish == 'true'
         with:
           node-version: 24.14.0
           registry-url: https://registry.npmjs.org
-      - if: needs.version-check.outputs.should_publish == 'true'
-        run: npm ci --ignore-scripts
-      - if: needs.version-check.outputs.should_publish == 'true'
-        run: npm run build
-      - if: needs.version-check.outputs.should_publish == 'true'
-        run: npm test
+      - run: npm ci --ignore-scripts
+      - run: npm run build
+      - run: npm test
       - run: npm publish --access public
-        if: needs.version-check.outputs.should_publish == 'true'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   build-native-bundles:
     needs: version-check
-    if: needs.version-check.outputs.should_build_release == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -113,12 +97,52 @@ jobs:
           name: native-${{ matrix.id }}
           path: dist/release/*
 
+  release-edge:
+    needs:
+      - version-check
+      - build-native-bundles
+    if: needs.build-native-bundles.result == 'success'
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+      - shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.version-check.outputs.version }}
+        run: |
+          NOTES="Rolling Feynman bundles from main for the curl/PowerShell installer."
+          if gh release view edge >/dev/null 2>&1; then
+            gh release view edge --json assets --jq '.assets[].name' | while IFS= read -r asset; do
+              [ -n "$asset" ] || continue
+              gh release delete-asset edge "$asset" --yes
+            done
+            gh release upload edge release-assets/*
+            gh release edit edge \
+              --title "edge" \
+              --notes "$NOTES" \
+              --prerelease \
+              --draft=false \
+              --target "$GITHUB_SHA"
+          else
+            gh release create edge release-assets/* \
+              --title "edge" \
+              --notes "$NOTES" \
+              --prerelease \
+              --latest=false \
+              --target "$GITHUB_SHA"
+          fi
+
   release-github:
     needs:
       - version-check
       - publish-npm
       - build-native-bundles
-    if: needs.version-check.outputs.should_build_release == 'true' && needs.build-native-bundles.result == 'success' && needs.publish-npm.result == 'success'
+    if: needs.version-check.outputs.should_publish == 'true' && needs.build-native-bundles.result == 'success' && needs.publish-npm.result == 'success'
     runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
       contents: write
@@ -137,7 +161,8 @@ jobs:
             gh release edit "v$VERSION" \
               --title "v$VERSION" \
               --notes "Standalone Feynman bundles for native installation." \
-              --draft=false
+              --draft=false \
+              --target "$GITHUB_SHA"
           else
             gh release create "v$VERSION" release-assets/* \
               --title "v$VERSION" \

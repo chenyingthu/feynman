@@ -16,13 +16,16 @@
 ```bash
 curl -fsSL https://feynman.is/install | bash
 
+# stable release channel
+curl -fsSL https://feynman.is/install | bash -s -- stable
+
 # package manager fallback
 pnpm add -g @companion-ai/feynman
 
 bun add -g @companion-ai/feynman
 ```
 
-Then run `feynman setup` to configure your model and get started.
+The one-line installer tracks the latest `main` build. Use `stable` or an exact version to pin a release. Then run `feynman setup` to configure your model and get started.
 
 ---
 
