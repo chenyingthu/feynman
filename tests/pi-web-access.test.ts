@@ -18,6 +18,10 @@ test("loadPiWebAccessConfig returns empty config when Pi web config is missing",
 	assert.deepEqual(loadPiWebAccessConfig(configPath), {});
 });
 
+test("getPiWebSearchConfigPath respects FEYNMAN_HOME semantics", () => {
+	assert.equal(getPiWebSearchConfigPath("/tmp/custom-home"), "/tmp/custom-home/.feynman/web-search.json");
+});
+
 test("getPiWebAccessStatus reads Pi web-access config directly", () => {
 	const root = mkdtempSync(join(tmpdir(), "feynman-pi-web-"));
 	const configPath = getPiWebSearchConfigPath(root);

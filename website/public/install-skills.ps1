@@ -46,7 +46,7 @@ function Resolve-VersionMetadata {
   return [PSCustomObject]@{
     ResolvedVersion = $resolvedVersion
     GitRef = "v$resolvedVersion"
-    DownloadUrl = "https://github.com/getcompanion-ai/feynman/archive/refs/tags/v$resolvedVersion.zip"
+    DownloadUrl = if ($env:FEYNMAN_INSTALL_SKILLS_ARCHIVE_URL) { $env:FEYNMAN_INSTALL_SKILLS_ARCHIVE_URL } else { "https://github.com/getcompanion-ai/feynman/archive/refs/tags/v$resolvedVersion.zip" }
   }
 }
 

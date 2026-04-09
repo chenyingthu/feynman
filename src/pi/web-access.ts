@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
+import { getFeynmanHome } from "../config/paths.js";
 
 export type PiWebSearchProvider = "auto" | "perplexity" | "exa" | "gemini";
 
@@ -26,8 +27,9 @@ export type PiWebAccessStatus = {
 	note: string;
 };
 
-export function getPiWebSearchConfigPath(home = process.env.HOME ?? homedir()): string {
-	return resolve(home, ".feynman", "web-search.json");
+export function getPiWebSearchConfigPath(home?: string): string {
+	const feynmanHome = home ? resolve(home, ".feynman") : getFeynmanHome();
+	return resolve(feynmanHome, "web-search.json");
 }
 
 function normalizeProvider(value: unknown): PiWebSearchProvider | undefined {

@@ -4,6 +4,7 @@ import { execSync } from "node:child_process";
 import { resolve as resolvePath } from "node:path";
 
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
+import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 
 import {
 	APP_ROOT,
@@ -11,10 +12,8 @@ import {
 	FEYNMAN_VERSION,
 } from "./shared.js";
 
-const ANSI_RE = /\x1b\[[0-9;]*m/g;
-
 function visibleLength(text: string): number {
-	return text.replace(ANSI_RE, "").length;
+	return visibleWidth(text);
 }
 
 function formatHeaderPath(path: string): string {
@@ -23,10 +22,8 @@ function formatHeaderPath(path: string): string {
 }
 
 function truncateVisible(text: string, maxVisible: number): string {
-	const raw = text.replace(ANSI_RE, "");
-	if (raw.length <= maxVisible) return text;
-	if (maxVisible <= 3) return ".".repeat(maxVisible);
-	return `${raw.slice(0, maxVisible - 3)}...`;
+	if (visibleWidth(text) <= maxVisible) return text;
+	return truncateToWidth(text, maxVisible, maxVisible <= 3 ? "" : "...");
 }
 
 function wrapWords(text: string, maxW: number): string[] {
@@ -34,12 +31,12 @@ function wrapWords(text: string, maxW: number): string[] {
 	const lines: string[] = [];
 	let cur = "";
 	for (let word of words) {
-		if (word.length > maxW) {
+		if (visibleWidth(word) > maxW) {
 			if (cur) { lines.push(cur); cur = ""; }
-			word = maxW > 3 ? `${word.slice(0, maxW - 1)}…` : word.slice(0, maxW);
+			word = truncateToWidth(word, maxW, maxW > 3 ? "…" : "");
 		}
 		const test = cur ? `${cur} ${word}` : word;
-		if (cur && test.length > maxW) {
+		if (cur && visibleWidth(test) > maxW) {
 			lines.push(cur);
 			cur = word;
 		} else {
@@ -56,9 +53,10 @@ function padRight(text: string, width: number): string {
 }
 
 function centerText(text: string, width: number): string {
-	if (text.length >= width) return text.slice(0, width);
-	const left = Math.floor((width - text.length) / 2);
-	const right = width - text.length - left;
+	const textWidth = visibleWidth(text);
+	if (textWidth >= width) return truncateToWidth(text, width, "");
+	const left = Math.floor((width - textWidth) / 2);
+	const right = width - textWidth - left;
 	return `${" ".repeat(left)}${text}${" ".repeat(right)}`;
 }
 
@@ -287,8 +285,8 @@ export function installFeynmanHeader(
 
 					if (activity) {
 						const maxActivityLen = leftW * 2;
-						const trimmed = activity.length > maxActivityLen
-							? `${activity.slice(0, maxActivityLen - 1)}…`
+						const trimmed = visibleWidth(activity) > maxActivityLen
+							? truncateToWidth(activity, maxActivityLen, "…")
 							: activity;
 						leftLines.push("");
 						leftLines.push(theme.fg("accent", theme.bold("Last Activity")));

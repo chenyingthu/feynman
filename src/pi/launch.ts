@@ -1,8 +1,14 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
+import { constants } from "node:os";
 
 import { buildPiArgs, buildPiEnv, type PiRuntimeOptions, resolvePiPaths, toNodeImportSpecifier } from "./runtime.js";
 import { ensureSupportedNodeVersion } from "../system/node-version.js";
+
+export function exitCodeFromSignal(signal: NodeJS.Signals): number {
+	const signalNumber = constants.signals[signal];
+	return typeof signalNumber === "number" ? 128 + signalNumber : 1;
+}
 
 export async function launchPiChat(options: PiRuntimeOptions): Promise<void> {
 	ensureSupportedNodeVersion();
@@ -36,11 +42,9 @@ export async function launchPiChat(options: PiRuntimeOptions): Promise<void> {
 		child.on("error", reject);
 		child.on("exit", (code, signal) => {
 			if (signal) {
-				try {
-					process.kill(process.pid, signal);
-				} catch {
-					process.exitCode = 1;
-				}
+				console.error(`feynman terminated because the Pi child exited with ${signal}.`);
+				process.exitCode = exitCodeFromSignal(signal);
+				resolvePromise();
 				return;
 			}
 			process.exitCode = code ?? 0;

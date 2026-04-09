@@ -146,15 +146,17 @@ archive_metadata="$(resolve_version)"
 resolved_version="$(printf '%s\n' "$archive_metadata" | sed -n '1p')"
 git_ref="$(printf '%s\n' "$archive_metadata" | sed -n '2p')"
 
-archive_url=""
-case "$git_ref" in
-  main)
-    archive_url="https://github.com/getcompanion-ai/feynman/archive/refs/heads/main.tar.gz"
-    ;;
-  v*)
-    archive_url="https://github.com/getcompanion-ai/feynman/archive/refs/tags/${git_ref}.tar.gz"
-    ;;
-esac
+archive_url="${FEYNMAN_INSTALL_SKILLS_ARCHIVE_URL:-}"
+if [ -z "$archive_url" ]; then
+  case "$git_ref" in
+    main)
+      archive_url="https://github.com/getcompanion-ai/feynman/archive/refs/heads/main.tar.gz"
+      ;;
+    v*)
+      archive_url="https://github.com/getcompanion-ai/feynman/archive/refs/tags/${git_ref}.tar.gz"
+      ;;
+  esac
+fi
 
 if [ -z "$archive_url" ]; then
   echo "Could not resolve a download URL for ref: $git_ref" >&2
