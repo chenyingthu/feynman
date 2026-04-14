@@ -286,6 +286,15 @@ Use this file to track chronology, not release notes. Keep entries short, factua
 - Blockers: I did not run a true WSL shell here, so the WSL fix is validated by the deterministic source patch plus tests rather than an actual Windows-hosted browser-launch repro.
 - Next: Push the WSL/login pass and close the stale issues and PRs that are already superseded by `main`.
 
+### 2026-04-14 09:35 PDT — review-findings-and-audit-cleanup
+
+- Objective: Fix the remaining concrete issues found in the deeper review pass instead of stopping at tracker cleanup.
+- Changed: Updated the `pi-web-access` patch so Feynman defaults search workflow to `none` without disabling explicit `summary-review`; softened the research workflow prompts so only unattended/one-shot runs auto-continue while interactive users still get a chance to request plan changes; corrected uninstall docs to mention `~/.ahub` alongside `~/.feynman`; bumped the root `basic-ftp` override from `5.2.1` to `5.2.2`.
+- Verified: Ran `npm test`, `npm run typecheck`, `npm run build`, `cd website && npm run build`, and `npm audit`; root audit is now clean.
+- Failed / learned: Astro still emits a duplicate-content-id warning for `website/src/content/docs/getting-started/installation.md`, but the website build succeeds and I did not identify a low-risk repo-side fix for that warning in this pass.
+- Blockers: The duplicate-id warning remains as a build warning only, not a failing correctness gate.
+- Next: If desired, isolate the Astro duplicate-id warning separately with a minimal reproduction rather than mixing it into runtime/CLI maintenance.
+
 ### 2026-04-12 13:20 PDT — capital-france (citation verification brief)
 
 - Objective: Verify citations in the capital-of-France draft and produce a cited verifier brief.
