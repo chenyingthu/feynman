@@ -25,7 +25,7 @@ curl -fsSL https://feynman.is/install | bash
 irm https://feynman.is/install.ps1 | iex
 ```
 
-The one-line installer fetches the latest tagged release. To pin a version, pass it explicitly, for example `curl -fsSL https://feynman.is/install | bash -s -- 0.2.18`.
+The one-line installer fetches the latest tagged release. To pin a version, pass it explicitly, for example `curl -fsSL https://feynman.is/install | bash -s -- 0.2.19`.
 
 The installer downloads a standalone native bundle with its own Node.js runtime.
 

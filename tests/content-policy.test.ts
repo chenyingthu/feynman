@@ -33,10 +33,12 @@ test("bundled prompts and skills do not contain blocked promotional product cont
 
 test("draft workflow explicitly forbids fabricated results and unproven figures", () => {
 	const draftPrompt = readFileSync(join(repoRoot, "prompts", "draft.md"), "utf8");
+	const systemPrompt = readFileSync(join(repoRoot, ".feynman", "SYSTEM.md"), "utf8");
 	const writerPrompt = readFileSync(join(repoRoot, ".feynman", "agents", "writer.md"), "utf8");
 	const verifierPrompt = readFileSync(join(repoRoot, ".feynman", "agents", "verifier.md"), "utf8");
 
 	for (const [label, content] of [
+		["system prompt", systemPrompt],
 		["draft prompt", draftPrompt],
 		["writer prompt", writerPrompt],
 		["verifier prompt", verifierPrompt],
