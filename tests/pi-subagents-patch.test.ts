@@ -171,6 +171,71 @@ test("patchPiSubagentsSource preserves output on top-level parallel tasks", () =
 	assert.doesNotMatch(patched, /resolvePiAgentDir/);
 });
 
+test("patchPiSubagentsSource preserves output in async parallel task handoff", () => {
+	const input = [
+		"function run(tasks: TaskParam[]) {",
+		"\tconst modelOverrides = tasks.map(() => undefined);",
+		"\tconst skillOverrides = tasks.map(() => undefined);",
+		"\tconst parallelTasks = tasks.map((t, i) => ({",
+		"\t\tagent: t.agent,",
+		"\t\ttask: params.context === \"fork\" ? wrapForkTask(taskTexts[i]!) : taskTexts[i]!,",
+		"\t\tcwd: t.cwd,",
+		"\t\t...(modelOverrides[i] ? { model: modelOverrides[i] } : {}),",
+		"\t\t...(skillOverrides[i] !== undefined ? { skill: skillOverrides[i] } : {}),",
+		"\t}));",
+		"}",
+	].join("\n");
+
+	const patched = patchPiSubagentsSource("subagent-executor.ts", input);
+
+	assert.match(patched, /\n\t\toutput: t\.output,/);
+});
+
+test("patchPiSubagentsSource uses task output when resolving foreground parallel behavior", () => {
+	const input = [
+		"async function run(tasks: TaskParam[]) {",
+		"\tconst skillOverrides = tasks.map((t) => normalizeSkillInput(t.skill));",
+		"\tif (params.clarify === true && ctx.hasUI) {",
+		"\t\tconst behaviors = agentConfigs.map((c, i) =>",
+		"\t\t\tresolveStepBehavior(c, { skills: skillOverrides[i] }),",
+		"\t\t);",
+		"\t}",
+		"\tconst behaviors = agentConfigs.map((config) => resolveStepBehavior(config, {}));",
+		"}",
+	].join("\n");
+
+	const patched = patchPiSubagentsSource("subagent-executor.ts", input);
+
+	assert.match(patched, /resolveStepBehavior\(c, \{ output: tasks\[i\]\?\.output, skills: skillOverrides\[i\] \}\)/);
+	assert.match(patched, /resolveStepBehavior\(config, \{ output: tasks\[i\]\?\.output, skills: skillOverrides\[i\] \}\)/);
+	assert.doesNotMatch(patched, /resolveStepBehavior\(config, \{\}\)/);
+});
+
+test("patchPiSubagentsSource passes foreground parallel output paths into runSync", () => {
+	const input = [
+		"async function runForegroundParallelTasks(input: ForegroundParallelRunInput): Promise<SingleResult[]> {",
+		"\treturn mapConcurrent(input.tasks, input.concurrencyLimit, async (task, index) => {",
+		"\t\tconst overrideSkills = input.skillOverrides[index];",
+		"\t\tconst effectiveSkills = overrideSkills === undefined ? input.behaviors[index]?.skills : overrideSkills;",
+		"\t\tconst taskCwd = resolveParallelTaskCwd(task, input.paramsCwd, input.worktreeSetup, index);",
+		"\t\treturn runSync(input.ctx.cwd, input.agents, task.agent, input.taskTexts[index]!, {",
+		"\t\t\tcwd: taskCwd,",
+		"\t\t\tsignal: input.signal,",
+		"\t\t\tmaxOutput: input.maxOutput,",
+		"\t\t\tmaxSubagentDepth: input.maxSubagentDepths[index],",
+		"\t\t});",
+		"\t});",
+		"}",
+	].join("\n");
+
+	const patched = patchPiSubagentsSource("subagent-executor.ts", input);
+
+	assert.match(patched, /const outputPath = typeof input\.behaviors\[index\]\?\.output === "string"/);
+	assert.match(patched, /const taskText = injectSingleOutputInstruction\(input\.taskTexts\[index\]!, outputPath\)/);
+	assert.match(patched, /runSync\(input\.ctx\.cwd, input\.agents, task\.agent, taskText, \{/);
+	assert.match(patched, /\n\t\t\toutputPath,/);
+});
+
 test("patchPiSubagentsSource documents output in top-level task schema", () => {
 	const input = [
 		"export const TaskItem = Type.Object({ ",

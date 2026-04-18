@@ -238,6 +238,75 @@ export function patchPiSubagentsSource(relativePath, source) {
 					"\t\t...(modelOverrides[index] ? { model: modelOverrides[index] } : {}),",
 				].join("\n"),
 			);
+			patched = replaceAll(
+				patched,
+				[
+					"\t\t\t\tcwd: t.cwd,",
+					"\t\t\t\t...(modelOverrides[i] ? { model: modelOverrides[i] } : {}),",
+				].join("\n"),
+				[
+					"\t\t\t\tcwd: t.cwd,",
+					"\t\t\t\toutput: t.output,",
+					"\t\t\t\t...(modelOverrides[i] ? { model: modelOverrides[i] } : {}),",
+				].join("\n"),
+			);
+			patched = replaceAll(
+				patched,
+				[
+					"\t\tcwd: t.cwd,",
+					"\t\t...(modelOverrides[i] ? { model: modelOverrides[i] } : {}),",
+				].join("\n"),
+				[
+					"\t\tcwd: t.cwd,",
+					"\t\toutput: t.output,",
+					"\t\t...(modelOverrides[i] ? { model: modelOverrides[i] } : {}),",
+				].join("\n"),
+			);
+			patched = replaceAll(
+				patched,
+				[
+					"\t\tconst behaviors = agentConfigs.map((c, i) =>",
+					"\t\t\tresolveStepBehavior(c, { skills: skillOverrides[i] }),",
+					"\t\t);",
+				].join("\n"),
+				[
+					"\t\tconst behaviors = agentConfigs.map((c, i) =>",
+					"\t\t\tresolveStepBehavior(c, { output: tasks[i]?.output, skills: skillOverrides[i] }),",
+					"\t\t);",
+				].join("\n"),
+			);
+			patched = replaceAll(
+				patched,
+				"\tconst behaviors = agentConfigs.map((config) => resolveStepBehavior(config, {}));",
+				"\tconst behaviors = agentConfigs.map((config, i) => resolveStepBehavior(config, { output: tasks[i]?.output, skills: skillOverrides[i] }));",
+			);
+			patched = replaceAll(
+				patched,
+				[
+					"\t\tconst taskCwd = resolveParallelTaskCwd(task, input.paramsCwd, input.worktreeSetup, index);",
+					"\t\treturn runSync(input.ctx.cwd, input.agents, task.agent, input.taskTexts[index]!, {",
+				].join("\n"),
+				[
+					"\t\tconst taskCwd = resolveParallelTaskCwd(task, input.paramsCwd, input.worktreeSetup, index);",
+					"\t\tconst outputPath = typeof input.behaviors[index]?.output === \"string\"",
+					"\t\t\t? resolveSingleOutputPath(input.behaviors[index]?.output, input.ctx.cwd, taskCwd)",
+					"\t\t\t: undefined;",
+					"\t\tconst taskText = injectSingleOutputInstruction(input.taskTexts[index]!, outputPath);",
+					"\t\treturn runSync(input.ctx.cwd, input.agents, task.agent, taskText, {",
+				].join("\n"),
+			);
+			patched = replaceAll(
+				patched,
+				[
+					"\t\t\tmaxOutput: input.maxOutput,",
+					"\t\t\tmaxSubagentDepth: input.maxSubagentDepths[index],",
+				].join("\n"),
+				[
+					"\t\t\tmaxOutput: input.maxOutput,",
+					"\t\t\toutputPath,",
+					"\t\t\tmaxSubagentDepth: input.maxSubagentDepths[index],",
+				].join("\n"),
+			);
 			break;
 		case "schemas.ts":
 			patched = replaceAll(

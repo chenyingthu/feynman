@@ -19,6 +19,8 @@ Analyze the research question using extended thinking. Develop a research strate
 - Source types and time periods that matter
 - Acceptance criteria: what evidence would make the answer "sufficient"
 
+Make the scale decision before assigning owners in the plan. If the topic is a narrow "what is X" explainer, the plan must use lead-owned direct search tasks only; do not allocate researcher subagents in the task ledger.
+
 Derive a short slug from the topic (lowercase, hyphens, no filler words, ≤5 words — e.g. "cloud-sandbox-pricing" not "deepresearch-plan"). Write the plan to `outputs/.plans/<slug>.md` as a self-contained artifact. Use this same slug for all artifacts in this run.
 If `CHANGELOG.md` exists, read the most recent relevant entries before finalizing the plan. Once the workflow becomes multi-round or spans enough work to merit resume support, append concise entries to `CHANGELOG.md` after meaningful progress and before stopping.
 
@@ -61,14 +63,18 @@ Do not stop after planning. If live search, subagents, web access, alphaXiv, or 
 
 | Query type | Execution |
 |---|---|
-| Single fact or narrow question | Search directly yourself, no subagents, 3-10 tool calls |
+| Single fact or narrow question, including "what is X" explainers | Search directly yourself, no subagents, 3-10 tool calls |
 | Direct comparison (2-3 items) | 2 parallel `researcher` subagents |
 | Broad survey or multi-faceted topic | 3-4 parallel `researcher` subagents |
 | Complex multi-domain research | 4-6 parallel `researcher` subagents |
 
 Never spawn subagents for work you can do in 5 tool calls.
+For "what is X" explainer topics, you MUST NOT spawn researcher subagents unless the user explicitly asks for comprehensive coverage, current landscape, benchmarks, or production deployment.
+Do not inflate a simple explainer into a multi-agent survey.
 
 ## 3. Spawn researchers
+
+Skip this section entirely when the scale decision chose direct search/no subagents. In that case, gather evidence yourself with search/fetch/paper tools, write notes directly to `<slug>-research-direct.md`, and continue to Section 4.
 
 Launch parallel `researcher` subagents via `subagent`. Each gets a structured brief with:
 - **Objective:** what to find
@@ -78,12 +84,16 @@ Launch parallel `researcher` subagents via `subagent`. Each gets a structured br
 - **Task IDs:** the specific ledger rows they own and must report back on
 
 Assign each researcher a clearly disjoint dimension — different source types, geographic scopes, time periods, or technical angles. Never duplicate coverage.
+Keep `subagent` tool-call JSON small and valid. For detailed task instructions, write a per-researcher brief first, e.g. `outputs/.plans/<slug>-T1.md`, then pass a short task string that points to that brief and the required output file. Do not place multi-paragraph instructions inside the `subagent` JSON.
+Use only supported `subagent` keys. Do not add extra keys such as `artifacts` unless the tool schema explicitly exposes them.
+When using parallel researchers, always set `failFast: false` so one blocked researcher does not abort the whole workflow.
+Do not name exact tool commands in subagent tasks unless those tool names are visible in the current tool set. Prefer broad guidance such as "use paper search and web search"; if a PDF parser or paper fetch fails, the researcher must continue from metadata, abstracts, and web sources and mark PDF parsing as blocked.
 
 ```
 {
   tasks: [
-    { agent: "researcher", task: "...", output: "<slug>-research-web.md" },
-    { agent: "researcher", task: "...", output: "<slug>-research-papers.md" }
+    { agent: "researcher", task: "Read outputs/.plans/<slug>-T1.md and write <slug>-research-web.md.", output: "<slug>-research-web.md" },
+    { agent: "researcher", task: "Read outputs/.plans/<slug>-T2.md and write <slug>-research-papers.md.", output: "<slug>-research-papers.md" }
   ],
   concurrency: 4,
   failFast: false
@@ -150,25 +160,29 @@ Save this draft to `outputs/.drafts/<slug>-draft.md`.
 Spawn the `verifier` agent to post-process YOUR draft. The verifier agent adds inline citations, verifies every source URL, and produces the final output:
 
 ```
-{ agent: "verifier", task: "Add inline citations to <slug>-draft.md using the research files as source material. Verify every URL.", output: "<slug>-brief.md" }
+{ agent: "verifier", task: "Add inline citations to outputs/.drafts/<slug>-draft.md using the research files as source material. Verify every URL. Write the complete cited brief to outputs/.drafts/<slug>-cited.md.", output: "outputs/.drafts/<slug>-cited.md" }
 ```
 
 The verifier agent does not rewrite the report — it only anchors claims to sources and builds the numbered Sources section.
+This step is mandatory and must complete before any reviewer runs. Do not run the `verifier` and `reviewer` in the same parallel `subagent` call.
+After the verifier returns, verify on disk that `outputs/.drafts/<slug>-cited.md` exists. If the verifier wrote to a different path, find the cited file, move or copy it to `outputs/.drafts/<slug>-cited.md`, and use that path from this point forward.
 
 ## 7. Verify
 
-Spawn the `reviewer` agent against the cited draft. The reviewer checks for:
+Only after `outputs/.drafts/<slug>-cited.md` exists, spawn the `reviewer` agent against that cited draft. The reviewer checks for:
 - Unsupported claims that slipped past citation
 - Logical gaps or contradictions between sections
 - Single-source claims on critical findings
 - Overstated confidence relative to evidence quality
 
 ```
-{ agent: "reviewer", task: "Verify <slug>-brief.md — flag any claims that lack sufficient source backing, identify logical gaps, and check that confidence levels match evidence strength. This is a verification pass, not a peer review.", output: "<slug>-verification.md" }
+{ agent: "reviewer", task: "Verify outputs/.drafts/<slug>-cited.md — flag any claims that lack sufficient source backing, identify logical gaps, and check that confidence levels match evidence strength. This is a verification pass, not a peer review.", output: "<slug>-verification.md" }
 ```
 
 If the reviewer flags FATAL issues, fix them in the brief before delivering. MAJOR issues get noted in the Open Questions section. MINOR issues are accepted.
 After fixes, run at least one more review-style verification pass if any FATAL issues were found. Do not assume one fix solved everything.
+When applying reviewer fixes, do not issue one giant `edit` tool call with many replacements. Use small localized edits only when there are 1-3 simple corrections. For section rewrites, table rewrites, or more than 3 substantive fixes, read the cited draft and write a corrected full file to `outputs/.drafts/<slug>-revised.md` instead. Then run the follow-up review against `outputs/.drafts/<slug>-revised.md`.
+The final candidate is `outputs/.drafts/<slug>-revised.md` if it exists; otherwise it is `outputs/.drafts/<slug>-cited.md`.
 
 ## 8. Deliver
 
@@ -196,11 +210,11 @@ Write a provenance record alongside it as `<slug>.provenance.md`:
 Before you stop, verify on disk that all of these exist:
 - `outputs/.plans/<slug>.md`
 - `outputs/.drafts/<slug>-draft.md`
-- `<slug>-brief.md` intermediate cited brief
+- `outputs/.drafts/<slug>-cited.md` intermediate cited brief
 - `outputs/<slug>.md` or `papers/<slug>.md` final promoted deliverable
 - `outputs/<slug>.provenance.md` or `papers/<slug>.provenance.md` provenance sidecar
 
-Do not stop at `<slug>-brief.md` alone. If the cited brief exists but the promoted final output or provenance sidecar does not, create them before responding.
+Do not stop at the cited or revised draft alone. If the cited/revised brief exists but the promoted final output or provenance sidecar does not, create them before responding.
 If full verification could not be completed, still create the final deliverable and provenance sidecar with `Verification: BLOCKED` or `PASS WITH NOTES` and list the missing checks. Never end with only an explanation in chat.
 
 ## Background execution

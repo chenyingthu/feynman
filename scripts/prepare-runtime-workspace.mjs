@@ -147,8 +147,8 @@ function prepareWorkspace(packageSpecs) {
 	const result = spawnSync(
 		process.env.npm_execpath ? process.execPath : "npm",
 		process.env.npm_execpath
-			? [process.env.npm_execpath, "install", "--prefer-offline", "--no-audit", "--no-fund", "--no-dry-run", "--legacy-peer-deps", "--loglevel", "error", "--prefix", workspaceDir, ...packageSpecs]
-			: ["install", "--prefer-offline", "--no-audit", "--no-fund", "--no-dry-run", "--legacy-peer-deps", "--loglevel", "error", "--prefix", workspaceDir, ...packageSpecs],
+			? [process.env.npm_execpath, "install", "--prefer-online", "--no-audit", "--no-fund", "--no-dry-run", "--legacy-peer-deps", "--loglevel", "error", "--prefix", workspaceDir, ...packageSpecs]
+			: ["install", "--prefer-online", "--no-audit", "--no-fund", "--no-dry-run", "--legacy-peer-deps", "--loglevel", "error", "--prefix", workspaceDir, ...packageSpecs],
 		{ stdio: "inherit", env: childNpmInstallEnv() },
 	);
 	if (result.status !== 0) {

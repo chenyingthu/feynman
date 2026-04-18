@@ -72,6 +72,35 @@ test("deepresearch workflow requires durable artifacts even when blocked", () =>
 	assert.match(deepResearchPrompt, /Never end with only an explanation in chat/i);
 });
 
+test("deepresearch citation and review stages are sequential and avoid giant edits", () => {
+	const deepResearchPrompt = readFileSync(join(repoRoot, "prompts", "deepresearch.md"), "utf8");
+
+	assert.match(deepResearchPrompt, /must complete before any reviewer runs/i);
+	assert.match(deepResearchPrompt, /Do not run the `verifier` and `reviewer` in the same parallel `subagent` call/i);
+	assert.match(deepResearchPrompt, /outputs\/\.drafts\/<slug>-cited\.md/i);
+	assert.match(deepResearchPrompt, /do not issue one giant `edit` tool call/i);
+	assert.match(deepResearchPrompt, /outputs\/\.drafts\/<slug>-revised\.md/i);
+	assert.match(deepResearchPrompt, /The final candidate is `outputs\/\.drafts\/<slug>-revised\.md` if it exists/i);
+});
+
+test("deepresearch keeps subagent tool calls small and skips subagents for narrow explainers", () => {
+	const deepResearchPrompt = readFileSync(join(repoRoot, "prompts", "deepresearch.md"), "utf8");
+
+	assert.match(deepResearchPrompt, /including "what is X" explainers/i);
+	assert.match(deepResearchPrompt, /Make the scale decision before assigning owners/i);
+	assert.match(deepResearchPrompt, /lead-owned direct search tasks only/i);
+	assert.match(deepResearchPrompt, /MUST NOT spawn researcher subagents/i);
+	assert.match(deepResearchPrompt, /Do not inflate a simple explainer into a multi-agent survey/i);
+	assert.match(deepResearchPrompt, /Skip this section entirely when the scale decision chose direct search\/no subagents/i);
+	assert.match(deepResearchPrompt, /<slug>-research-direct\.md/i);
+	assert.match(deepResearchPrompt, /Keep `subagent` tool-call JSON small and valid/i);
+	assert.match(deepResearchPrompt, /write a per-researcher brief first/i);
+	assert.match(deepResearchPrompt, /Do not place multi-paragraph instructions inside the `subagent` JSON/i);
+	assert.match(deepResearchPrompt, /Do not add extra keys such as `artifacts`/i);
+	assert.match(deepResearchPrompt, /always set `failFast: false`/i);
+	assert.match(deepResearchPrompt, /if a PDF parser or paper fetch fails/i);
+});
+
 test("workflow prompts do not introduce implicit confirmation gates", () => {
 	const workflowPrompts = [
 		"audit.md",
