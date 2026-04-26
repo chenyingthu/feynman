@@ -35,6 +35,33 @@ function slugify(value: string): string {
 	return words.length > 0 ? words.join("-") : "candidate-pool";
 }
 
+function parseCandidatePoolArgs(args: string[]): { query: string; slug?: string } {
+	const queryParts: string[] = [];
+	let slug: string | undefined;
+	for (let index = 0; index < args.length; index += 1) {
+		const arg = args[index];
+		if (arg === "--slug") {
+			const value = args[index + 1]?.trim();
+			if (!value) {
+				throw new Error("Usage: feynman research candidate-pool [--slug <slug>] <query>");
+			}
+			slug = value;
+			index += 1;
+			continue;
+		}
+		if (arg.startsWith("--slug=") || arg.startsWith("slug=")) {
+			const value = arg.slice(arg.indexOf("=") + 1).trim();
+			if (!value) {
+				throw new Error("Usage: feynman research candidate-pool [--slug <slug>] <query>");
+			}
+			slug = value;
+			continue;
+		}
+		queryParts.push(arg);
+	}
+	return { query: queryParts.join(" ").trim(), slug };
+}
+
 export async function handleResearchCommand(subcommand: string | undefined, args: string[], workingDir = process.cwd()): Promise<void> {
 	if (!subcommand || subcommand === "status") {
 		printResearchStatus();
@@ -42,11 +69,11 @@ export async function handleResearchCommand(subcommand: string | undefined, args
 	}
 
 	if (subcommand === "candidate-pool") {
-		const query = args.join(" ").trim();
+		const { query, slug: explicitSlug } = parseCandidatePoolArgs(args);
 		if (!query) {
-			throw new Error("Usage: feynman research candidate-pool <query>");
+			throw new Error("Usage: feynman research candidate-pool [--slug <slug>] <query>");
 		}
-		const slug = slugify(query);
+		const slug = explicitSlug ?? slugify(query);
 		const result = await writeCandidatePoolFile(query, slug, workingDir);
 		console.log(`Candidate pool written: ${result.path}`);
 		console.log(`Candidates: ${result.pool.entries.length}`);

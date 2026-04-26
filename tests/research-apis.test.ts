@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -102,8 +102,52 @@ test("printResearchStatus never prints API keys", () => {
 test("handleResearchCommand rejects missing candidate-pool query", async () => {
 	await assert.rejects(
 		() => handleResearchCommand("candidate-pool", []),
-		/Usage: feynman research candidate-pool <query>/,
+		/Usage: feynman research candidate-pool \[--slug <slug>\] <query>/,
 	);
+});
+
+test("handleResearchCommand accepts explicit candidate-pool slug", async () => {
+	const root = mkdtempSync(join(tmpdir(), "feynman-research-command-"));
+	const originalFetch = globalThis.fetch;
+	globalThis.fetch = (async (input: string | URL | Request) => {
+		const url = input instanceof URL ? input : new URL(String(input));
+		if (url.hostname === "api.openalex.org") {
+			return { ok: true, json: async () => ({ results: [] }) } as Response;
+		}
+		if (url.hostname === "api.crossref.org") {
+			return { ok: true, json: async () => ({ message: { items: [] } }) } as Response;
+		}
+		throw new Error(`Unexpected URL ${url}`);
+	}) as typeof fetch;
+	try {
+		await handleResearchCommand("candidate-pool", ["--slug", "stable-slug", "power", "electronics"], root);
+	} finally {
+		globalThis.fetch = originalFetch;
+	}
+
+	assert.equal(existsSync(join(root, "outputs", ".drafts", "stable-slug-candidate-pool.md")), true);
+});
+
+test("handleResearchCommand accepts cli-safe slug=<slug> candidate-pool argument", async () => {
+	const root = mkdtempSync(join(tmpdir(), "feynman-research-command-"));
+	const originalFetch = globalThis.fetch;
+	globalThis.fetch = (async (input: string | URL | Request) => {
+		const url = input instanceof URL ? input : new URL(String(input));
+		if (url.hostname === "api.openalex.org") {
+			return { ok: true, json: async () => ({ results: [] }) } as Response;
+		}
+		if (url.hostname === "api.crossref.org") {
+			return { ok: true, json: async () => ({ message: { items: [] } }) } as Response;
+		}
+		throw new Error(`Unexpected URL ${url}`);
+	}) as typeof fetch;
+	try {
+		await handleResearchCommand("candidate-pool", ["slug=safe-slug", "power", "electronics"], root);
+	} finally {
+		globalThis.fetch = originalFetch;
+	}
+
+	assert.equal(existsSync(join(root, "outputs", ".drafts", "safe-slug-candidate-pool.md")), true);
 });
 
 test("research API URL builders include polite metadata and auth in the right place", () => {
