@@ -140,6 +140,86 @@ test("buildCandidatePool includes IEEE Xplore and Semantic Scholar candidates wh
 	assert.match(pool.entries[0].scoreReasons.join(","), /semantic-scholar/);
 });
 
+test("buildCandidatePool merges results from multiple taxonomy-derived search queries", async () => {
+	const seenSearches: string[] = [];
+	function multiQueryFetch(input: string | URL | Request): Promise<Response> {
+		const url = input instanceof URL ? input : new URL(String(input));
+		const search = url.searchParams.get("search") ?? url.searchParams.get("query") ?? "";
+		if (search) seenSearches.push(search);
+		if (url.hostname === "api.openalex.org") {
+			return Promise.resolve({
+				ok: true,
+				json: async () => ({
+					results: [
+						{
+							title: search.includes("impedance") ? "Impedance based stability analysis" : "Modal small signal analysis",
+							publication_year: 2024,
+							doi: search.includes("impedance") ? "https://doi.org/10.1234/impedance" : "https://doi.org/10.1234/modal",
+							primary_location: { landing_page_url: "https://example.org/paper" },
+							open_access: { is_oa: false },
+						},
+					],
+				}),
+			} as Response);
+		}
+		if (url.hostname === "api.crossref.org") {
+			return Promise.resolve({ ok: true, json: async () => ({ message: { items: [] } }) } as Response);
+		}
+		throw new Error(`Unexpected URL ${url}`);
+	}
+
+	const pool = await buildCandidatePool("stability analysis", {
+		config: { openAlexEmail: "user@example.com", crossrefMailto: "user@example.com" },
+		searchQueries: ["impedance stability", "modal stability"],
+		fetch: multiQueryFetch as typeof fetch,
+	});
+
+	assert.deepEqual(pool.searchQueries, ["stability analysis", "impedance stability", "modal stability"]);
+	assert.equal(pool.entries.length, 2);
+	assert.ok(seenSearches.includes("stability analysis"));
+	assert.ok(seenSearches.includes("impedance stability"));
+	assert.ok(seenSearches.includes("modal stability"));
+	assert.match(formatCandidatePoolMarkdown(pool), /## Search Queries/);
+});
+
+test("buildCandidatePool scores candidates against the best matching search query", async () => {
+	function bestQueryFetch(input: string | URL | Request): Promise<Response> {
+		const url = input instanceof URL ? input : new URL(String(input));
+		const search = url.searchParams.get("search") ?? url.searchParams.get("query") ?? "";
+		if (url.hostname === "api.openalex.org") {
+			return Promise.resolve({
+				ok: true,
+				json: async () => ({
+					results: [
+						{
+							title: search.includes("impedance")
+								? "Impedance based stability analysis of inverter based resources"
+								: "Generic stability analysis",
+							publication_year: 2024,
+							doi: search.includes("impedance") ? "https://doi.org/10.1234/specific" : "https://doi.org/10.1234/generic",
+							primary_location: { landing_page_url: "https://example.org/paper" },
+							open_access: { is_oa: false },
+						},
+					],
+				}),
+			} as Response);
+		}
+		if (url.hostname === "api.crossref.org") {
+			return Promise.resolve({ ok: true, json: async () => ({ message: { items: [] } }) } as Response);
+		}
+		throw new Error(`Unexpected URL ${url}`);
+	}
+
+	const pool = await buildCandidatePool("中文主题", {
+		config: { openAlexEmail: "user@example.com", crossrefMailto: "user@example.com" },
+		searchQueries: ["impedance based stability analysis inverter based resources"],
+		fetch: bestQueryFetch as typeof fetch,
+	});
+
+	assert.equal(pool.entries[0].title, "Impedance based stability analysis of inverter based resources");
+	assert.match(pool.entries[0].scoreReasons.join(","), /title-relevance/);
+});
+
 test("buildCandidatePool merges API records and enriches OA locations", async () => {
 	const pool = await buildCandidatePool("power system scenario generation", {
 		config: {

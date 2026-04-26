@@ -35,8 +35,9 @@ function slugify(value: string): string {
 	return words.length > 0 ? words.join("-") : "candidate-pool";
 }
 
-function parseCandidatePoolArgs(args: string[]): { query: string; slug?: string } {
+function parseCandidatePoolArgs(args: string[]): { query: string; slug?: string; searchQueries: string[] } {
 	const queryParts: string[] = [];
+	const searchQueries: string[] = [];
 	let slug: string | undefined;
 	for (let index = 0; index < args.length; index += 1) {
 		const arg = args[index];
@@ -57,9 +58,26 @@ function parseCandidatePoolArgs(args: string[]): { query: string; slug?: string 
 			slug = value;
 			continue;
 		}
+		if (arg === "--query") {
+			const value = args[index + 1]?.trim();
+			if (!value) {
+				throw new Error("Usage: feynman research candidate-pool [slug=<slug>] [query=<search-query> ...] <topic>");
+			}
+			searchQueries.push(value);
+			index += 1;
+			continue;
+		}
+		if (arg.startsWith("--query=") || arg.startsWith("query=")) {
+			const value = arg.slice(arg.indexOf("=") + 1).trim();
+			if (!value) {
+				throw new Error("Usage: feynman research candidate-pool [slug=<slug>] [query=<search-query> ...] <topic>");
+			}
+			searchQueries.push(value);
+			continue;
+		}
 		queryParts.push(arg);
 	}
-	return { query: queryParts.join(" ").trim(), slug };
+	return { query: queryParts.join(" ").trim(), slug, searchQueries };
 }
 
 export async function handleResearchCommand(subcommand: string | undefined, args: string[], workingDir = process.cwd()): Promise<void> {
@@ -69,14 +87,15 @@ export async function handleResearchCommand(subcommand: string | undefined, args
 	}
 
 	if (subcommand === "candidate-pool") {
-		const { query, slug: explicitSlug } = parseCandidatePoolArgs(args);
+		const { query, slug: explicitSlug, searchQueries } = parseCandidatePoolArgs(args);
 		if (!query) {
-			throw new Error("Usage: feynman research candidate-pool [--slug <slug>] <query>");
+			throw new Error("Usage: feynman research candidate-pool [slug=<slug>] [query=<search-query> ...] <topic>");
 		}
 		const slug = explicitSlug ?? slugify(query);
-		const result = await writeCandidatePoolFile(query, slug, workingDir);
+		const result = await writeCandidatePoolFile(query, slug, workingDir, { searchQueries });
 		console.log(`Candidate pool written: ${result.path}`);
 		console.log(`Candidates: ${result.pool.entries.length}`);
+		console.log(`Search queries: ${result.pool.searchQueries.length}`);
 		if (result.pool.warnings.length > 0) {
 			console.log(`Warnings: ${result.pool.warnings.length}`);
 		}

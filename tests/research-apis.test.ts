@@ -102,7 +102,7 @@ test("printResearchStatus never prints API keys", () => {
 test("handleResearchCommand rejects missing candidate-pool query", async () => {
 	await assert.rejects(
 		() => handleResearchCommand("candidate-pool", []),
-		/Usage: feynman research candidate-pool \[--slug <slug>\] <query>/,
+		/Usage: feynman research candidate-pool \[slug=<slug>\] \[query=<search-query> \.\.\.\] <topic>/,
 	);
 });
 
@@ -147,7 +147,38 @@ test("handleResearchCommand accepts cli-safe slug=<slug> candidate-pool argument
 		globalThis.fetch = originalFetch;
 	}
 
-	assert.equal(existsSync(join(root, "outputs", ".drafts", "safe-slug-candidate-pool.md")), true);
+assert.equal(existsSync(join(root, "outputs", ".drafts", "safe-slug-candidate-pool.md")), true);
+});
+
+test("handleResearchCommand accepts taxonomy-derived candidate-pool search queries", async () => {
+	const root = mkdtempSync(join(tmpdir(), "feynman-research-command-"));
+	const calls: string[] = [];
+	const originalFetch = globalThis.fetch;
+	globalThis.fetch = (async (input: string | URL | Request) => {
+		const url = input instanceof URL ? input : new URL(String(input));
+		const query = url.searchParams.get("search") ?? url.searchParams.get("query");
+		if (query) calls.push(query);
+		if (url.hostname === "api.openalex.org") {
+			return { ok: true, json: async () => ({ results: [] }) } as Response;
+		}
+		if (url.hostname === "api.crossref.org") {
+			return { ok: true, json: async () => ({ message: { items: [] } }) } as Response;
+		}
+		throw new Error(`Unexpected URL ${url}`);
+	}) as typeof fetch;
+	try {
+		await handleResearchCommand(
+			"candidate-pool",
+			["slug=query-slug", "query=method family", "query=object family", "main topic"],
+			root,
+		);
+	} finally {
+		globalThis.fetch = originalFetch;
+	}
+
+	assert.ok(calls.includes("main topic"));
+	assert.ok(calls.includes("method family"));
+	assert.ok(calls.includes("object family"));
 });
 
 test("research API URL builders include polite metadata and auth in the right place", () => {

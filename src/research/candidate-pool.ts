@@ -32,6 +32,7 @@ export type CandidatePoolEntry = {
 
 export type CandidatePool = {
 	query: string;
+	searchQueries: string[];
 	generatedAt: string;
 	entries: CandidatePoolEntry[];
 	warnings: string[];
@@ -286,19 +287,25 @@ function mergeEntries(entries: CandidatePoolEntry[]): CandidatePoolEntry[] {
 	return Array.from(merged.values());
 }
 
-function scoreEntry(entry: CandidatePoolEntry, query: string): CandidatePoolEntry {
+function scoreEntry(entry: CandidatePoolEntry, relevanceQueries: string[]): CandidatePoolEntry {
 	const reasons: string[] = [];
 	let score = 0;
-	const relevance = titleRelevanceScore(entry.title, query);
-	const queryTermCount = extractRelevanceTerms(query).size;
+	const relevanceCandidates = relevanceQueries
+		.map((query) => ({
+			query,
+			termCount: extractRelevanceTerms(query).size,
+			...titleRelevanceScore(entry.title, query),
+		}))
+		.sort((left, right) => right.score - left.score || right.matchedTerms - left.matchedTerms);
+	const relevance = relevanceCandidates[0] ?? { score: 0, matchedTerms: 0, termCount: 0 };
 	if (relevance.score > 0) {
 		score += relevance.score;
 		reasons.push(`title-relevance:${relevance.matchedTerms}`);
-		if (queryTermCount >= 4 && relevance.matchedTerms === 1) {
+		if (relevance.termCount >= 4 && relevance.matchedTerms === 1) {
 			score -= 8;
 			reasons.push("weak-title-match");
 		}
-	} else if (queryTermCount > 0) {
+	} else if (relevanceCandidates.some((candidate) => candidate.termCount > 0)) {
 		score -= 5;
 		reasons.push("title-mismatch");
 	}
@@ -370,54 +377,59 @@ export async function buildCandidatePool(query: string, options: {
 	config?: ResearchApiConfig;
 	fetch?: ResearchApiFetch;
 	limit?: number;
+	searchQueries?: string[];
 } = {}): Promise<CandidatePool> {
 	const config = options.config ?? loadResearchApiConfig();
 	const fetchImpl = options.fetch;
 	const warnings: string[] = [];
 	const entries: CandidatePoolEntry[] = [];
+	const searchQueries = Array.from(new Set([query, ...(options.searchQueries ?? [])].map((value) => value.trim()).filter(Boolean)));
 
-	const openAlexResult = await Promise.allSettled([searchOpenAlexWorks(query, { config, fetch: fetchImpl })]);
-	if (openAlexResult[0].status === "fulfilled") {
-		entries.push(...parseOpenAlexEntries(openAlexResult[0].value));
-	} else {
-		warnings.push(`OpenAlex unavailable: ${openAlexResult[0].reason instanceof Error ? openAlexResult[0].reason.message : String(openAlexResult[0].reason)}`);
-	}
-
-	const crossrefResult = await Promise.allSettled([searchCrossrefWorks(query, { config, fetch: fetchImpl })]);
-	if (crossrefResult[0].status === "fulfilled") {
-		entries.push(...parseCrossrefEntries(crossrefResult[0].value));
-	} else {
-		warnings.push(`Crossref unavailable: ${crossrefResult[0].reason instanceof Error ? crossrefResult[0].reason.message : String(crossrefResult[0].reason)}`);
-	}
-
-	if (config.ieeeXploreApiKey) {
-		const ieeeResult = await Promise.allSettled([searchIeeeXplore(query, { config, fetch: fetchImpl })]);
-		if (ieeeResult[0].status === "fulfilled") {
-			entries.push(...parseIeeeEntries(ieeeResult[0].value));
+	for (const searchQuery of searchQueries) {
+		const openAlexResult = await Promise.allSettled([searchOpenAlexWorks(searchQuery, { config, fetch: fetchImpl })]);
+		if (openAlexResult[0].status === "fulfilled") {
+			entries.push(...parseOpenAlexEntries(openAlexResult[0].value));
 		} else {
-			warnings.push(`IEEE Xplore unavailable: ${ieeeResult[0].reason instanceof Error ? ieeeResult[0].reason.message : String(ieeeResult[0].reason)}`);
+			warnings.push(`OpenAlex unavailable for "${searchQuery}": ${openAlexResult[0].reason instanceof Error ? openAlexResult[0].reason.message : String(openAlexResult[0].reason)}`);
 		}
-	}
 
-	if (config.semanticScholarApiKey) {
-		const semanticScholarResult = await Promise.allSettled([searchSemanticScholarPapers(query, { config, fetch: fetchImpl })]);
-		if (semanticScholarResult[0].status === "fulfilled") {
-			entries.push(...parseSemanticScholarEntries(semanticScholarResult[0].value));
+		const crossrefResult = await Promise.allSettled([searchCrossrefWorks(searchQuery, { config, fetch: fetchImpl })]);
+		if (crossrefResult[0].status === "fulfilled") {
+			entries.push(...parseCrossrefEntries(crossrefResult[0].value));
 		} else {
-			warnings.push(`Semantic Scholar unavailable: ${semanticScholarResult[0].reason instanceof Error ? semanticScholarResult[0].reason.message : String(semanticScholarResult[0].reason)}`);
+			warnings.push(`Crossref unavailable for "${searchQuery}": ${crossrefResult[0].reason instanceof Error ? crossrefResult[0].reason.message : String(crossrefResult[0].reason)}`);
+		}
+
+		if (config.ieeeXploreApiKey) {
+			const ieeeResult = await Promise.allSettled([searchIeeeXplore(searchQuery, { config, fetch: fetchImpl })]);
+			if (ieeeResult[0].status === "fulfilled") {
+				entries.push(...parseIeeeEntries(ieeeResult[0].value));
+			} else {
+				warnings.push(`IEEE Xplore unavailable for "${searchQuery}": ${ieeeResult[0].reason instanceof Error ? ieeeResult[0].reason.message : String(ieeeResult[0].reason)}`);
+			}
+		}
+
+		if (config.semanticScholarApiKey) {
+			const semanticScholarResult = await Promise.allSettled([searchSemanticScholarPapers(searchQuery, { config, fetch: fetchImpl })]);
+			if (semanticScholarResult[0].status === "fulfilled") {
+				entries.push(...parseSemanticScholarEntries(semanticScholarResult[0].value));
+			} else {
+				warnings.push(`Semantic Scholar unavailable for "${searchQuery}": ${semanticScholarResult[0].reason instanceof Error ? semanticScholarResult[0].reason.message : String(semanticScholarResult[0].reason)}`);
+			}
 		}
 	}
 
 	const merged = mergeEntries(entries);
 	await enrichWithUnpaywall(merged, config, fetchImpl);
 	const scored = merged
-		.map((entry) => scoreEntry(entry, query))
+		.map((entry) => scoreEntry(entry, searchQueries))
 		.sort((left, right) => right.score - left.score || (right.citedByCount ?? 0) - (left.citedByCount ?? 0))
 		.slice(0, options.limit ?? 30)
 		.map((entry, index) => ({ ...entry, id: `C${index + 1}` }));
 
 	return {
 		query,
+		searchQueries,
 		generatedAt: new Date().toISOString(),
 		entries: scored,
 		warnings,
@@ -433,7 +445,12 @@ export function formatCandidatePoolMarkdown(pool: CandidatePool): string {
 		"## Summary",
 		"",
 		`- Candidates: ${pool.entries.length}`,
+		`- Search queries: ${pool.searchQueries.length}`,
 		`- Warnings: ${pool.warnings.length}`,
+		"",
+		"## Search Queries",
+		"",
+		...pool.searchQueries.map((searchQuery) => `- ${searchQuery}`),
 		"",
 	];
 	if (pool.warnings.length > 0) {
@@ -470,6 +487,7 @@ export async function writeCandidatePoolFile(query: string, slug: string, workin
 	config?: ResearchApiConfig;
 	fetch?: ResearchApiFetch;
 	limit?: number;
+	searchQueries?: string[];
 } = {}): Promise<{ path: string; pool: CandidatePool }> {
 	const pool = await buildCandidatePool(query, options);
 	const draftDir = resolve(workingDir, "outputs", ".drafts");
