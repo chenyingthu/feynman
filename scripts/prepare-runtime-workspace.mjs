@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
 import { patchPiAgentCoreSource } from "./lib/pi-agent-core-patch.mjs";
+import { PI_WEB_ACCESS_PATCH_TARGETS, patchPiWebAccessSource } from "./lib/pi-web-access-patch.mjs";
 import { PI_SUBAGENTS_PATCH_TARGETS, patchPiSubagentsSource, stripPiSubagentBuiltinModelSource } from "./lib/pi-subagents-patch.mjs";
 
 const appRoot = resolve(import.meta.dirname, "..");
@@ -79,6 +80,7 @@ function getRuntimeInputHash() {
 		settingsPath,
 		resolve(appRoot, "scripts", "lib", "pi-agent-core-patch.mjs"),
 		resolve(appRoot, "scripts", "lib", "pi-subagents-patch.mjs"),
+		resolve(appRoot, "scripts", "lib", "pi-web-access-patch.mjs"),
 	]) {
 		hash.update(path);
 		hash.update("\0");
@@ -243,6 +245,26 @@ function patchBundledPiAgentCore() {
 	return true;
 }
 
+function patchBundledPiWebAccess() {
+	const piWebAccessRoot = resolve(workspaceNodeModulesDir, "pi-web-access");
+	if (!existsSync(piWebAccessRoot)) {
+		return false;
+	}
+
+	let changed = false;
+	for (const relativePath of PI_WEB_ACCESS_PATCH_TARGETS) {
+		const entryPath = resolve(piWebAccessRoot, relativePath);
+		if (!existsSync(entryPath)) continue;
+
+		const source = readFileSync(entryPath, "utf8");
+		const patched = patchPiWebAccessSource(relativePath, source);
+		if (patched === source) continue;
+		writeFileSync(entryPath, patched, "utf8");
+		changed = true;
+	}
+	return changed;
+}
+
 function archiveIsCurrent() {
 	if (!existsSync(workspaceArchivePath) || !existsSync(manifestPath)) {
 		return false;
@@ -266,7 +288,7 @@ const packageSpecs = readPackageSpecs();
 
 if (workspaceIsCurrent(packageSpecs)) {
 	console.log("[feynman] vendored runtime workspace already up to date");
-	if (patchBundledPiAgentCore() || patchBundledPiSubagents()) {
+	if (patchBundledPiAgentCore() || patchBundledPiSubagents() || patchBundledPiWebAccess()) {
 		writeManifest(packageSpecs);
 		console.log("[feynman] patched bundled Pi runtime");
 	}
@@ -284,6 +306,7 @@ prepareWorkspace(packageSpecs);
 pruneWorkspace();
 patchBundledPiAgentCore();
 patchBundledPiSubagents();
+patchBundledPiWebAccess();
 writeManifest(packageSpecs);
 createWorkspaceArchive();
 console.log("[feynman] vendored runtime workspace ready");

@@ -57,6 +57,54 @@ test("patchPiWebAccessSource defaults workflow to none for index.ts without disa
 	assert.match(patched, /summary-review = open curator with auto summary draft \(opt-in\)/);
 });
 
+test("patchPiWebAccessSource falls back to url when urls is an empty array", () => {
+	const input = "const urlList = params.urls ?? (params.url ? [params.url] : []);\n";
+
+	const patched = patchPiWebAccessSource("index.ts", input);
+
+	assert.match(patched, /params\.urls\?\.length \? params\.urls : \(params\.url \? \[params\.url\] : \[\]\)/);
+	assert.doesNotMatch(patched, /params\.urls \?\?/);
+});
+
+test("patchPiWebAccessSource prevents frames from hijacking normal URLs", () => {
+	const input = [
+		"function safeVideoInfo(url: string): { info: ReturnType<typeof isVideoFile>; error?: string } {",
+		"\treturn { info: isVideoFile(url) };",
+		"}",
+		"export async function extractContent(url: string, signal?: AbortSignal, options?: ExtractOptions) {",
+		"\tif (options?.frames && !options.timestamp) {",
+		"\t\treturn { url, title: \"\", content: \"\", error: \"Frame extraction only works with YouTube and local video files\" };",
+		"\t}",
+		"}",
+		"",
+	].join("\n");
+
+	const patched = patchPiWebAccessSource("extract.ts", input);
+
+	assert.match(patched, /function shouldExtractFrames\(url: string, frames: unknown, timestamp\?: string\): frames is number/);
+	assert.match(patched, /if \(shouldExtractFrames\(url, options\?\.frames, options\?\.timestamp\)\) \{/);
+	assert.doesNotMatch(patched, /if \(options\?\.frames && !options\.timestamp\) \{/);
+});
+
+test("patchPiWebAccessSource adds Promise.try compatibility for PDF extraction", () => {
+	const input = [
+		'import { getDocumentProxy } from "unpdf";',
+		"const DEFAULT_MAX_PAGES = 100;",
+		"export async function extractPDFToMarkdown(buffer: ArrayBuffer) {",
+		"  const pdf = await getDocumentProxy(new Uint8Array(buffer));",
+		"  return pdf;",
+		"}",
+		"",
+	].join("\n");
+
+	const patched = patchPiWebAccessSource("pdf-extract.ts", input);
+
+	assert.match(patched, /function ensurePromiseTryCompat\(\): void/);
+	assert.match(patched, /promiseCtor\.try = <T>\(fn: \(\) => T \| PromiseLike<T>\) => Promise\.resolve\(\)\.then\(fn\);/);
+	assert.match(patched, /ensurePromiseTryCompat\(\);\n\n  const \{ getDocumentProxy \} = await import\("unpdf"\);/);
+	assert.doesNotMatch(patched, /import \{ getDocumentProxy \} from "unpdf";/);
+});
+
 test("patchPiWebAccessSource is idempotent", () => {
 	const input = [
 		'import { join } from "node:path";',

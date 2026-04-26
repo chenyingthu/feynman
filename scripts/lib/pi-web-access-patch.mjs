@@ -1,6 +1,8 @@
 export const PI_WEB_ACCESS_PATCH_TARGETS = [
 	"index.ts",
 	"exa.ts",
+	"extract.ts",
+	"pdf-extract.ts",
 	"gemini-api.ts",
 	"gemini-search.ts",
 	"gemini-web.ts",
@@ -37,11 +39,62 @@ export function patchPiWebAccessSource(relativePath, source) {
 			);
 			changed = true;
 		}
+		const urlListOriginal = "const urlList = params.urls ?? (params.url ? [params.url] : []);";
+		const urlListPatched = "const urlList = params.urls?.length ? params.urls : (params.url ? [params.url] : []);";
+		if (patched.includes(urlListOriginal)) {
+			patched = patched.replace(urlListOriginal, urlListPatched);
+			changed = true;
+		}
 	}
 
 	if (relativePath === "index.ts" && changed) {
 		patched = patched.replace('import { join } from "node:path";', 'import { dirname, join } from "node:path";');
 		patched = patched.replace('const dir = join(homedir(), ".pi");', "const dir = dirname(WEB_SEARCH_CONFIG_PATH);");
+	}
+
+	if (relativePath === "extract.ts") {
+		const helper = [
+			"function shouldExtractFrames(url: string, frames: unknown, timestamp?: string): frames is number {",
+			'\tif (timestamp || typeof frames !== "number" || !Number.isInteger(frames) || frames <= 0) return false;',
+			"\tconst ytInfo = isYouTubeURL(url);",
+			"\tif (ytInfo.isYouTube && ytInfo.videoId) return true;",
+			"\tconst localVideo = safeVideoInfo(url);",
+			"\treturn !!localVideo.info;",
+			"}",
+		].join("\n");
+		if (!patched.includes("function shouldExtractFrames(")) {
+			patched = patched.replace(
+				"function safeVideoInfo(url: string): { info: ReturnType<typeof isVideoFile>; error?: string } {",
+				`${helper}\n\nfunction safeVideoInfo(url: string): { info: ReturnType<typeof isVideoFile>; error?: string } {`,
+			);
+		}
+		const before = "if (options?.frames && !options.timestamp) {";
+		const after = "if (shouldExtractFrames(url, options?.frames, options?.timestamp)) {";
+		if (patched.includes(before)) {
+			patched = patched.replace(before, after);
+			changed = true;
+		}
+	}
+
+	if (relativePath === "pdf-extract.ts" && !patched.includes("function ensurePromiseTryCompat()")) {
+		patched = patched.replace('import { getDocumentProxy } from "unpdf";\n', "");
+		const polyfill = [
+			"function ensurePromiseTryCompat(): void {",
+			'\tconst promiseCtor = Promise as typeof Promise & { try?: <T>(fn: () => T | PromiseLike<T>) => Promise<T> };',
+			"\tif (typeof promiseCtor.try === \"function\") return;",
+			"\tpromiseCtor.try = <T>(fn: () => T | PromiseLike<T>) => Promise.resolve().then(fn);",
+			"}",
+			"",
+		].join("\n");
+		patched = patched.replace(
+			'const DEFAULT_MAX_PAGES = 100;',
+			`${polyfill}const DEFAULT_MAX_PAGES = 100;`,
+		);
+		patched = patched.replace(
+			"  const pdf = await getDocumentProxy(new Uint8Array(buffer));",
+			'  ensurePromiseTryCompat();\n\n  const { getDocumentProxy } = await import("unpdf");\n  const pdf = await getDocumentProxy(new Uint8Array(buffer));',
+		);
+		changed = true;
 	}
 
 	return patched;
