@@ -26,6 +26,8 @@ export type CandidatePoolEntry = {
 	oaLandingPageUrl?: string;
 	oaPdfUrl?: string;
 	sourceQualityHint: "metadata" | "abstract" | "abstract+conclusion" | "full-text-sampled";
+	sourceSearchQueries: string[];
+	bestMatchingQuery?: string;
 	score: number;
 	scoreReasons: string[];
 };
@@ -155,6 +157,7 @@ function parseOpenAlexEntries(payload: unknown): CandidatePoolEntry[] {
 				oaLandingPageUrl,
 				oaPdfUrl,
 				sourceQualityHint: isOpenAccess ? "abstract+conclusion" : "metadata",
+				sourceSearchQueries: [],
 				score: 0,
 				scoreReasons: [],
 			};
@@ -187,6 +190,7 @@ function parseCrossrefEntries(payload: unknown): CandidatePoolEntry[] {
 				authors,
 				sourceApis: ["Crossref"],
 				sourceQualityHint: "metadata",
+				sourceSearchQueries: [],
 				score: 0,
 				scoreReasons: [],
 			};
@@ -221,6 +225,7 @@ function parseIeeeEntries(payload: unknown): CandidatePoolEntry[] {
 				openAccess,
 				oaPdfUrl,
 				sourceQualityHint: asString(record.abstract) ? "abstract" : "metadata",
+				sourceSearchQueries: [],
 				score: 0,
 				scoreReasons: [],
 			};
@@ -254,11 +259,19 @@ function parseSemanticScholarEntries(payload: unknown): CandidatePoolEntry[] {
 				openAccess: oaPdfUrl ? true : undefined,
 				oaPdfUrl,
 				sourceQualityHint: asString(record.abstract) ? "abstract" : "metadata",
+				sourceSearchQueries: [],
 				score: 0,
 				scoreReasons: [],
 			};
 		})
 		.filter((entry): entry is CandidatePoolEntry => Boolean(entry));
+}
+
+function tagEntriesWithSearchQuery(entries: CandidatePoolEntry[], searchQuery: string): CandidatePoolEntry[] {
+	return entries.map((entry) => ({
+		...entry,
+		sourceSearchQueries: Array.from(new Set([...entry.sourceSearchQueries, searchQuery])),
+	}));
 }
 
 function mergeEntries(entries: CandidatePoolEntry[]): CandidatePoolEntry[] {
@@ -280,6 +293,7 @@ function mergeEntries(entries: CandidatePoolEntry[]): CandidatePoolEntry[] {
 		existing.openAccess ??= entry.openAccess;
 		existing.oaLandingPageUrl ??= entry.oaLandingPageUrl;
 		existing.oaPdfUrl ??= entry.oaPdfUrl;
+		existing.sourceSearchQueries = Array.from(new Set([...existing.sourceSearchQueries, ...entry.sourceSearchQueries]));
 		if (existing.sourceQualityHint === "metadata" && entry.sourceQualityHint !== "metadata") {
 			existing.sourceQualityHint = entry.sourceQualityHint;
 		}
@@ -301,6 +315,7 @@ function scoreEntry(entry: CandidatePoolEntry, relevanceQueries: string[]): Cand
 	if (relevance.score > 0) {
 		score += relevance.score;
 		reasons.push(`title-relevance:${relevance.matchedTerms}`);
+		reasons.push(`best-query:${relevance.query}`);
 		if (relevance.termCount >= 4 && relevance.matchedTerms === 1) {
 			score -= 8;
 			reasons.push("weak-title-match");
@@ -344,6 +359,7 @@ function scoreEntry(entry: CandidatePoolEntry, relevanceQueries: string[]): Cand
 	}
 	return {
 		...entry,
+		bestMatchingQuery: relevance.score > 0 ? relevance.query : undefined,
 		score,
 		scoreReasons: reasons,
 	};
@@ -388,14 +404,14 @@ export async function buildCandidatePool(query: string, options: {
 	for (const searchQuery of searchQueries) {
 		const openAlexResult = await Promise.allSettled([searchOpenAlexWorks(searchQuery, { config, fetch: fetchImpl })]);
 		if (openAlexResult[0].status === "fulfilled") {
-			entries.push(...parseOpenAlexEntries(openAlexResult[0].value));
+			entries.push(...tagEntriesWithSearchQuery(parseOpenAlexEntries(openAlexResult[0].value), searchQuery));
 		} else {
 			warnings.push(`OpenAlex unavailable for "${searchQuery}": ${openAlexResult[0].reason instanceof Error ? openAlexResult[0].reason.message : String(openAlexResult[0].reason)}`);
 		}
 
 		const crossrefResult = await Promise.allSettled([searchCrossrefWorks(searchQuery, { config, fetch: fetchImpl })]);
 		if (crossrefResult[0].status === "fulfilled") {
-			entries.push(...parseCrossrefEntries(crossrefResult[0].value));
+			entries.push(...tagEntriesWithSearchQuery(parseCrossrefEntries(crossrefResult[0].value), searchQuery));
 		} else {
 			warnings.push(`Crossref unavailable for "${searchQuery}": ${crossrefResult[0].reason instanceof Error ? crossrefResult[0].reason.message : String(crossrefResult[0].reason)}`);
 		}
@@ -403,7 +419,7 @@ export async function buildCandidatePool(query: string, options: {
 		if (config.ieeeXploreApiKey) {
 			const ieeeResult = await Promise.allSettled([searchIeeeXplore(searchQuery, { config, fetch: fetchImpl })]);
 			if (ieeeResult[0].status === "fulfilled") {
-				entries.push(...parseIeeeEntries(ieeeResult[0].value));
+				entries.push(...tagEntriesWithSearchQuery(parseIeeeEntries(ieeeResult[0].value), searchQuery));
 			} else {
 				warnings.push(`IEEE Xplore unavailable for "${searchQuery}": ${ieeeResult[0].reason instanceof Error ? ieeeResult[0].reason.message : String(ieeeResult[0].reason)}`);
 			}
@@ -412,7 +428,7 @@ export async function buildCandidatePool(query: string, options: {
 		if (config.semanticScholarApiKey) {
 			const semanticScholarResult = await Promise.allSettled([searchSemanticScholarPapers(searchQuery, { config, fetch: fetchImpl })]);
 			if (semanticScholarResult[0].status === "fulfilled") {
-				entries.push(...parseSemanticScholarEntries(semanticScholarResult[0].value));
+				entries.push(...tagEntriesWithSearchQuery(parseSemanticScholarEntries(semanticScholarResult[0].value), searchQuery));
 			} else {
 				warnings.push(`Semantic Scholar unavailable for "${searchQuery}": ${semanticScholarResult[0].reason instanceof Error ? semanticScholarResult[0].reason.message : String(semanticScholarResult[0].reason)}`);
 			}
@@ -459,8 +475,8 @@ export function formatCandidatePoolMarkdown(pool: CandidatePool): string {
 	lines.push(
 		"## Candidates",
 		"",
-		"| ID | Score | Year | Title | Venue | DOI | APIs | OA | Quality hint | Why |",
-		"|---|---:|---:|---|---|---|---|---|---|---|",
+		"| ID | Score | Year | Title | Venue | DOI | APIs | OA | Quality hint | Best query | Source queries | Why |",
+		"|---|---:|---:|---|---|---|---|---|---|---|---|---|",
 	);
 	for (const entry of pool.entries) {
 		lines.push([
@@ -473,6 +489,8 @@ export function formatCandidatePoolMarkdown(pool: CandidatePool): string {
 			entry.sourceApis.join("+"),
 			entry.openAccess === undefined ? "" : entry.openAccess ? "yes" : "no",
 			entry.sourceQualityHint,
+			entry.bestMatchingQuery?.replace(/\|/g, "\\|") ?? "",
+			entry.sourceSearchQueries.join("; ").replace(/\|/g, "\\|"),
 			entry.scoreReasons.join(", "),
 		].join(" | ").replace(/^/, "| ").replace(/$/, " |"));
 	}

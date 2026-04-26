@@ -182,6 +182,46 @@ test("buildCandidatePool merges results from multiple taxonomy-derived search qu
 	assert.match(formatCandidatePoolMarkdown(pool), /## Search Queries/);
 });
 
+test("buildCandidatePool records source and best-matching search queries per candidate", async () => {
+	function duplicateFetch(input: string | URL | Request): Promise<Response> {
+		const url = input instanceof URL ? input : new URL(String(input));
+		const search = url.searchParams.get("search") ?? url.searchParams.get("query") ?? "";
+		if (url.hostname === "api.openalex.org") {
+			return Promise.resolve({
+				ok: true,
+				json: async () => ({
+					results: [
+						{
+							title: "Impedance stability analysis for inverter resources",
+							publication_year: 2024,
+							doi: "https://doi.org/10.1234/shared",
+							primary_location: { landing_page_url: `https://example.org/${encodeURIComponent(search)}` },
+							open_access: { is_oa: false },
+						},
+					],
+				}),
+			} as Response);
+		}
+		if (url.hostname === "api.crossref.org") {
+			return Promise.resolve({ ok: true, json: async () => ({ message: { items: [] } }) } as Response);
+		}
+		throw new Error(`Unexpected URL ${url}`);
+	}
+
+	const pool = await buildCandidatePool("stability analysis", {
+		config: { openAlexEmail: "user@example.com", crossrefMailto: "user@example.com" },
+		searchQueries: ["impedance stability resources"],
+		fetch: duplicateFetch as typeof fetch,
+	});
+
+	assert.equal(pool.entries.length, 1);
+	assert.deepEqual(pool.entries[0].sourceSearchQueries.sort(), ["impedance stability resources", "stability analysis"].sort());
+	assert.equal(pool.entries[0].bestMatchingQuery, "impedance stability resources");
+	const markdown = formatCandidatePoolMarkdown(pool);
+	assert.match(markdown, /Best query/);
+	assert.match(markdown, /Source queries/);
+});
+
 test("buildCandidatePool scores candidates against the best matching search query", async () => {
 	function bestQueryFetch(input: string | URL | Request): Promise<Response> {
 		const url = input instanceof URL ? input : new URL(String(input));
