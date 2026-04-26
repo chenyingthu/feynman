@@ -151,6 +151,27 @@ test("deepresearch keeps subagent tool calls small and skips subagents for narro
 	assert.match(deepResearchPrompt, /if a PDF parser or paper fetch fails/i);
 });
 
+test("lit workflow enforces evidence-driven quality gates", () => {
+	const litPrompt = readFileSync(join(repoRoot, "prompts", "lit.md"), "utf8");
+
+	assert.match(litPrompt, /quick literature scan/i);
+	assert.match(litPrompt, /Deep review target: at least 20 candidate sources considered/i);
+	assert.match(litPrompt, /at least 12 accepted sources/i);
+	assert.match(litPrompt, /source quality/i);
+	assert.match(litPrompt, /full-text/i);
+	assert.match(litPrompt, /abstract/i);
+	assert.match(litPrompt, /snippet/i);
+	assert.match(litPrompt, /metadata/i);
+	assert.match(litPrompt, /blocked/i);
+	assert.match(litPrompt, /outputs\/\.drafts\/<slug>-taxonomy\.md/i);
+	assert.match(litPrompt, /outputs\/\.drafts\/<slug>-evidence-matrix\.md/i);
+	assert.match(litPrompt, /outputs\/\.drafts\/<slug>-method-comparison\.md/i);
+	assert.match(litPrompt, /Write the draft from the taxonomy and evidence matrix, not from memory/i);
+	assert.match(litPrompt, /quality-gate status/i);
+	assert.match(litPrompt, /source quality counts/i);
+	assert.match(litPrompt, /verify on disk that the final output, provenance sidecar, plan, taxonomy, and evidence matrix exist/i);
+});
+
 test("review workflow must write final artifacts instead of stopping after planning", () => {
 	const reviewPrompt = readFileSync(join(repoRoot, "prompts", "review.md"), "utf8");
 
