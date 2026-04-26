@@ -34,6 +34,8 @@ The literature review workflow starts by choosing a mode and writing a plan. Qui
 
 Before synthesis, Feynman writes a taxonomy and evidence matrix. The taxonomy defines the review axes, such as method families, datasets, evaluation metrics, constraints, and downstream tasks. The evidence matrix records each accepted source with a stable ID, source quality, URL or DOI, key claim, limitations, and confidence. The synthesis step then writes from those artifacts rather than from memory.
 
+Quick scans use a reading budget. They prefer metadata, abstract, conclusion or discussion, limitations, method overview, evaluation metrics, and key table captions instead of loading entire article bodies. Per-source notes should stay compact, usually around 800-1500 words, and provenance labels partial reads as `abstract+conclusion` or `full-text-sampled`. Deep reviews may read full text, but still write concise source notes before synthesis.
+
 The output is organized chronologically and thematically, showing how ideas evolved over time and how different research groups approach the problem differently. Citation counts, publication venues, source quality, and direct-read coverage are used as signals for weighting claims, though the review explicitly notes when influential work contradicts the mainstream view or when the available evidence is too thin.
 
 ## Output format

@@ -159,10 +159,16 @@ test("lit workflow enforces evidence-driven quality gates", () => {
 	assert.match(litPrompt, /at least 12 accepted sources/i);
 	assert.match(litPrompt, /source quality/i);
 	assert.match(litPrompt, /full-text/i);
+	assert.match(litPrompt, /abstract\+conclusion/i);
+	assert.match(litPrompt, /full-text-sampled/i);
 	assert.match(litPrompt, /abstract/i);
 	assert.match(litPrompt, /snippet/i);
 	assert.match(litPrompt, /metadata/i);
 	assert.match(litPrompt, /blocked/i);
+	assert.match(litPrompt, /Reading Budget/i);
+	assert.match(litPrompt, /metadata, abstract, conclusion\/discussion\/limitations, method overview, evaluation metrics/i);
+	assert.match(litPrompt, /800-1500 words/i);
+	assert.match(litPrompt, /Do not carry the whole long page forward/i);
 	assert.match(litPrompt, /outputs\/\.drafts\/<slug>-taxonomy\.md/i);
 	assert.match(litPrompt, /outputs\/\.drafts\/<slug>-evidence-matrix\.md/i);
 	assert.match(litPrompt, /outputs\/\.drafts\/<slug>-method-comparison\.md/i);
