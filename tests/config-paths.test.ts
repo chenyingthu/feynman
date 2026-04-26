@@ -11,6 +11,7 @@ import {
 	getFeynmanAgentDir,
 	getFeynmanHome,
 	getFeynmanMemoryDir,
+	getResearchApisEnvPath,
 	getFeynmanStateDir,
 } from "../src/config/paths.js";
 
@@ -62,6 +63,10 @@ test("getDefaultSessionDir resolves to <home>/sessions", () => {
 
 test("getBootstrapStatePath resolves to <home>/.state/bootstrap.json", () => {
 	assert.equal(getBootstrapStatePath("/some/home"), resolve("/some/home", ".state", "bootstrap.json"));
+});
+
+test("getResearchApisEnvPath resolves to <home>/research-apis.env", () => {
+	assert.equal(getResearchApisEnvPath("/some/home"), resolve("/some/home", "research-apis.env"));
 });
 
 test("ensureFeynmanHome creates all required subdirectories", () => {

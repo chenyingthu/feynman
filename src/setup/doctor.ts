@@ -11,6 +11,7 @@ import { getCurrentModelSpec } from "../model/commands.js";
 import { buildModelStatusSnapshotFromRecords, getAvailableModelRecords, getSupportedModelRecords } from "../model/catalog.js";
 import { createModelRegistry, getModelsJsonPath } from "../model/registry.js";
 import { getConfiguredServiceTier } from "../model/service-tier.js";
+import { summarizeResearchApiStatus } from "../research/apis.js";
 
 function findProvidersMissingApiKey(modelsJsonPath: string): string[] {
 	try {
@@ -108,6 +109,8 @@ export function runStatus(options: DoctorOptions): void {
 	printInfo(`Recommended model: ${snapshot.recommendedModel ?? "not available"}`);
 	printInfo(`alphaXiv: ${snapshot.alphaLoggedIn ? snapshot.alphaUser ?? "configured" : "not configured"}`);
 	printInfo(`Web access: pi-web-access (${snapshot.webRouteLabel})`);
+	const researchApiStatus = summarizeResearchApiStatus();
+	printInfo(`Research APIs: ${researchApiStatus.filter((provider) => provider.configured).length}/${researchApiStatus.length} configured`);
 	printInfo(`Service tier: ${getConfiguredServiceTier(options.settingsPath) ?? "not set"}`);
 	printInfo(`Preview: ${snapshot.previewConfigured ? "configured" : "not configured"}`);
 
@@ -169,6 +172,12 @@ export function runDoctor(options: DoctorOptions): void {
 	console.log(`authenticated providers: ${modelStatus.authenticatedProviderCount}`);
 	console.log(`authenticated models: ${modelStatus.authenticatedModelCount}`);
 	console.log(`service tier: ${getConfiguredServiceTier(options.settingsPath) ?? "not set"}`);
+	const researchApiStatus = summarizeResearchApiStatus();
+	const configuredResearchApis = researchApiStatus.filter((provider) => provider.configured);
+	console.log(`research APIs: ${configuredResearchApis.length}/${researchApiStatus.length} configured`);
+	for (const provider of researchApiStatus) {
+		console.log(`  ${provider.label}: ${provider.configured ? "configured" : "missing"} (${provider.detail})`);
+	}
 	console.log(`recommended model: ${modelStatus.recommendedModel ?? "not available"}`);
 	if (modelStatus.recommendedModelReason) {
 		console.log(`  why: ${modelStatus.recommendedModelReason}`);

@@ -26,6 +26,10 @@ export function getBootstrapStatePath(home = getFeynmanHome()): string {
 	return resolve(getFeynmanStateDir(home), "bootstrap.json");
 }
 
+export function getResearchApisEnvPath(home = getFeynmanHome()): string {
+	return resolve(home, "research-apis.env");
+}
+
 export function ensureFeynmanHome(home = getFeynmanHome()): void {
 	for (const dir of [
 		home,

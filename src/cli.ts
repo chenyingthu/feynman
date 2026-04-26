@@ -40,6 +40,7 @@ import {
 } from "./model/commands.js";
 import { buildModelStatusSnapshotFromRecords, getAvailableModelRecords, getSupportedModelRecords } from "./model/catalog.js";
 import { clearSearchConfig, printSearchStatus, setSearchProvider } from "./search/commands.js";
+import { handleResearchCommand } from "./research/commands.js";
 import type { PiWebSearchProvider } from "./pi/web-access.js";
 import { runDoctor, runStatus } from "./setup/doctor.js";
 import { setupPreviewDependencies } from "./setup/preview.js";
@@ -78,6 +79,7 @@ function printHelp(appRoot: string): void {
 	printInfo("feynman doctor");
 	printInfo("feynman model");
 	printInfo("feynman search status");
+	printInfo("feynman research status");
 
 	printSection("Commands");
 	for (const section of cliCommandSections) {
@@ -609,6 +611,11 @@ export async function main(): Promise<void> {
 
 	if (command === "search") {
 		handleSearchCommand(rest[0], rest.slice(1));
+		return;
+	}
+
+	if (command === "research") {
+		handleResearchCommand(rest[0], rest.slice(1));
 		return;
 	}
 
