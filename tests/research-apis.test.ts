@@ -14,7 +14,7 @@ import {
 	searchOpenAlexWorks,
 	summarizeResearchApiStatus,
 } from "../src/research/apis.js";
-import { printResearchStatus } from "../src/research/commands.js";
+import { handleResearchCommand, printResearchStatus } from "../src/research/commands.js";
 
 function captureConsoleLog(fn: () => void): string[] {
 	const lines: string[] = [];
@@ -97,6 +97,13 @@ test("printResearchStatus never prints API keys", () => {
 	assert.match(output, /IEEE Xplore: configured/);
 	assert.doesNotMatch(output, /openalex-secret/);
 	assert.doesNotMatch(output, /ieee-secret/);
+});
+
+test("handleResearchCommand rejects missing candidate-pool query", async () => {
+	await assert.rejects(
+		() => handleResearchCommand("candidate-pool", []),
+		/Usage: feynman research candidate-pool <query>/,
+	);
 });
 
 test("research API URL builders include polite metadata and auth in the right place", () => {

@@ -170,10 +170,13 @@ test("lit workflow enforces evidence-driven quality gates", () => {
 	assert.match(litPrompt, /800-1500 words/i);
 	assert.match(litPrompt, /Do not carry the whole long page forward/i);
 	assert.match(litPrompt, /outputs\/\.drafts\/<slug>-taxonomy\.md/i);
+	assert.match(litPrompt, /feynman research candidate-pool/i);
+	assert.match(litPrompt, /outputs\/\.drafts\/<slug>-candidate-pool\.md/i);
 	assert.match(litPrompt, /outputs\/\.drafts\/<slug>-evidence-matrix\.md/i);
 	assert.match(litPrompt, /outputs\/\.drafts\/<slug>-method-comparison\.md/i);
 	assert.match(litPrompt, /Write the draft from the taxonomy and evidence matrix, not from memory/i);
 	assert.match(litPrompt, /quality-gate status/i);
+	assert.match(litPrompt, /candidate pool status/i);
 	assert.match(litPrompt, /source quality counts/i);
 	assert.match(litPrompt, /verify on disk that the final output, provenance sidecar, plan, taxonomy, and evidence matrix exist/i);
 });

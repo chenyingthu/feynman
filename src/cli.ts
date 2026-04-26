@@ -615,7 +615,7 @@ export async function main(): Promise<void> {
 	}
 
 	if (command === "research") {
-		handleResearchCommand(rest[0], rest.slice(1));
+		await handleResearchCommand(rest[0], rest.slice(1), workingDir);
 		return;
 	}
 

@@ -1,6 +1,7 @@
 import { getResearchApisEnvPath } from "../config/paths.js";
 import { printInfo, printPanel, printSection } from "../ui/terminal.js";
 import { loadResearchApiConfig, summarizeResearchApiStatus } from "./apis.js";
+import { writeCandidatePoolFile } from "./candidate-pool.js";
 
 export function printResearchStatus(envPath = getResearchApisEnvPath()): void {
 	const config = loadResearchApiConfig(envPath);
@@ -23,9 +24,35 @@ export function printResearchStatus(envPath = getResearchApisEnvPath()): void {
 	printInfo("  IEEE_XPLORE_API_KEY, ELSEVIER_API_KEY");
 }
 
-export function handleResearchCommand(subcommand: string | undefined, args: string[]): void {
+function slugify(value: string): string {
+	const words = value
+		.toLowerCase()
+		.replace(/[^\p{L}\p{N}]+/gu, " ")
+		.trim()
+		.split(/\s+/)
+		.filter((word) => word.length > 0)
+		.slice(0, 5);
+	return words.length > 0 ? words.join("-") : "candidate-pool";
+}
+
+export async function handleResearchCommand(subcommand: string | undefined, args: string[], workingDir = process.cwd()): Promise<void> {
 	if (!subcommand || subcommand === "status") {
 		printResearchStatus();
+		return;
+	}
+
+	if (subcommand === "candidate-pool") {
+		const query = args.join(" ").trim();
+		if (!query) {
+			throw new Error("Usage: feynman research candidate-pool <query>");
+		}
+		const slug = slugify(query);
+		const result = await writeCandidatePoolFile(query, slug, workingDir);
+		console.log(`Candidate pool written: ${result.path}`);
+		console.log(`Candidates: ${result.pool.entries.length}`);
+		if (result.pool.warnings.length > 0) {
+			console.log(`Warnings: ${result.pool.warnings.length}`);
+		}
 		return;
 	}
 
