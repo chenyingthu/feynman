@@ -69,6 +69,61 @@ function replaceAll(source, from, to) {
 	return source.split(from).join(to);
 }
 
+function patchAgentsDiscoveryAllSource(source) {
+	return source.replace(
+		/(\nexport function discoverAgentsAll\(cwd: string\): \{[\s\S]*?\} \{\n)([\s\S]*?)(\n\treturn \{ builtin, user, project, chains, userDir, projectDir, userSettingsPath, projectSettingsPath \};\n\})/,
+		(_match, start, body, end) => {
+			let nextBody = body
+				.replace(/\tconst userDirOld = path\.join\(os\.homedir\(\), "\.pi", "agent", "agents"\);\n/g, "")
+				.replace(/\tconst userDirNew = path\.join\(os\.homedir\(\), "\.agents"\);\n/g, "")
+				.replace(/\tconst userDir = path\.join\(resolvePiAgentDir\(\), "agents"\);\n/g, "");
+			nextBody = replaceAll(
+				nextBody,
+				[
+					"\tconst user = [",
+					'\t\t...loadAgentsFromDir(userDirOld, "user"),',
+					'\t\t...loadAgentsFromDir(userDirNew, "user"),',
+					"\t];",
+				].join("\n"),
+				'\tconst user = loadAgentsFromDir(userDir, "user");',
+			);
+			nextBody = replaceAll(
+				nextBody,
+				[
+					"\tconst chains = [",
+					'\t\t...loadChainsFromDir(userDirOld, "user"),',
+					'\t\t...loadChainsFromDir(userDirNew, "user"),',
+					'\t\t...(projectDir ? loadChainsFromDir(projectDir, "project") : []),',
+					"\t];",
+				].join("\n"),
+				[
+					"\tconst chains = [",
+					'\t\t...loadChainsFromDir(userDir, "user"),',
+					'\t\t...(projectDir ? loadChainsFromDir(projectDir, "project") : []),',
+					"\t];",
+				].join("\n"),
+			);
+			nextBody = replaceAll(
+				nextBody,
+				[
+					"\tconst chains = [",
+					'\t\t...loadChainsFromDir(userDirOld, "user"),',
+					'\t\t...loadChainsFromDir(userDirNew, "user"),',
+					"\t\t...Array.from(chainMap.values()),",
+					"\t];",
+				].join("\n"),
+				[
+					"\tconst chains = [",
+					'\t\t...loadChainsFromDir(userDir, "user"),',
+					"\t\t...Array.from(chainMap.values()),",
+					"\t];",
+				].join("\n"),
+			);
+			return `${start}\tconst userDir = path.join(resolvePiAgentDir(), "agents");\n${nextBody}${end}`;
+		},
+	);
+}
+
 export function stripPiSubagentBuiltinModelSource(source) {
 	if (!source.startsWith("---\n")) {
 		return source;
@@ -169,6 +224,7 @@ export function patchPiSubagentsSource(relativePath, source) {
 				'\tconst userDir = fs.existsSync(userDirNew) ? userDirNew : userDirOld;',
 				'\tconst userDir = path.join(resolvePiAgentDir(), "agents");',
 			);
+			patched = patchAgentsDiscoveryAllSource(patched);
 			break;
 		case "artifacts.ts":
 			patched = replaceAll(

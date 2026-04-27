@@ -141,6 +141,51 @@ test("patchPiSubagentsSource rewrites modern agents.ts discovery paths", () => {
 	assert.ok(!patched.includes('fs.existsSync(userDirNew) ? userDirNew : userDirOld'));
 });
 
+test("patchPiSubagentsSource declares userDir before discoverAgentsAll uses it", () => {
+	const input = [
+		'import * as os from "node:os";',
+		'import * as path from "node:path";',
+		'export function discoverAgentsAll(cwd: string): {',
+		'\tbuiltin: AgentConfig[];',
+		'\tuser: AgentConfig[];',
+		'\tproject: AgentConfig[];',
+		'\tchains: ChainConfig[];',
+		'\tuserDir: string;',
+		'\tprojectDir: string | null;',
+		'\tuserSettingsPath: string;',
+		'\tprojectSettingsPath: string | null;',
+		'} {',
+		'\tconst userDirOld = path.join(os.homedir(), ".pi", "agent", "agents");',
+		'\tconst userDirNew = path.join(os.homedir(), ".agents");',
+		'\tconst { readDirs: projectDirs, preferredDir: projectDir } = resolveNearestProjectAgentDirs(cwd);',
+		'\tconst userSettingsPath = getUserAgentSettingsPath();',
+		'\tconst projectSettingsPath = getProjectAgentSettingsPath(cwd);',
+		'\tconst builtin = loadAgentsFromDir(BUILTIN_AGENTS_DIR, "builtin");',
+		'\tconst user = loadAgentsFromDir(userDir, "user");',
+		'\tconst projectMap = new Map<string, AgentConfig>();',
+		'\tconst project = Array.from(projectMap.values());',
+		'\tconst chainMap = new Map<string, ChainConfig>();',
+		'\tconst chains = [',
+		'\t\t...loadChainsFromDir(userDirOld, "user"),',
+		'\t\t...loadChainsFromDir(userDirNew, "user"),',
+		'\t\t...Array.from(chainMap.values()),',
+		'\t];',
+		'\tconst userDir = path.join(resolvePiAgentDir(), "agents");',
+		'\treturn { builtin, user, project, chains, userDir, projectDir, userSettingsPath, projectSettingsPath };',
+		'}',
+	].join("\n");
+
+	const patched = patchPiSubagentsSource("agents.ts", input);
+	const declarationIndex = patched.indexOf('const userDir = path.join(resolvePiAgentDir(), "agents");');
+	const firstUseIndex = patched.indexOf("loadAgentsFromDir(userDir");
+
+	assert.ok(declarationIndex >= 0);
+	assert.ok(firstUseIndex > declarationIndex);
+	assert.ok(!patched.includes("userDirOld"));
+	assert.ok(!patched.includes("userDirNew"));
+	assert.match(patched, /loadChainsFromDir\(userDir, "user"\)/);
+});
+
 test("patchPiSubagentsSource preserves output on top-level parallel tasks", () => {
 	const input = [
 		"interface TaskParam {",

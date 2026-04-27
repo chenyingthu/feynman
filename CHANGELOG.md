@@ -330,3 +330,21 @@ Use this file to track chronology, not release notes. Keep entries short, factua
 - Failed / learned: IEEE remains non-critical because DOI, OpenAlex/Crossref metadata, Unpaywall, Semantic Scholar, author/institution pages, and explicit source-quality downgrades are better default fallbacks.
 - Blockers: None for the prompt and candidate-pool hardening; end-to-end quality still depends on the runtime following the new fix loop.
 - Next: Run another full `feynman lit --deep` workflow when a fresh quality sample is needed, and inspect whether MAJOR findings now produce a revised candidate before delivery.
+
+### 2026-04-27 local — subagent-discovery-runtime-fix
+
+- Objective: Retest the `/lit` review loop and fix the runtime blocker that prevented verifier/reviewer subagents from running.
+- Changed: Patched the vendored `pi-subagents` source rewrite for modern `discoverAgentsAll()` so `userDir` is declared before use and old `.pi/.agents` discovery variables are removed.
+- Verified: Ran `node --import tsx --test tests/pi-subagents-patch.test.ts tests/content-policy.test.ts tests/research-candidate-pool.test.ts tests/research-apis.test.ts`, `npm run typecheck`, `npm run build`, `node scripts/prepare-runtime-workspace.mjs`, and a one-shot `node bin/feynman.js --prompt ...` subagent-access smoke.
+- Verified: Re-ran `feynman lit "电力电子化系统小干扰稳定分析方法 --deep"`; it produced `outputs/power-electronic-stability.md`, a provenance sidecar, reviewer verification, and a revised draft after MAJOR findings.
+- Failed / learned: The first retest exposed `Cannot access 'userDir' before initialization`; after the patch, the reviewer subagent ran and no FATAL issues remained.
+- Blockers: IEEE API still returns 403 and alpha search is not logged in; these are now degraded access limitations rather than workflow blockers.
+- Next: Consider a separate cleanup to make long Feynman runs stream progress or surface active artifact paths while subagents/PDF extraction are running.
+
+### 2026-04-27 local — power-electronics-stability
+
+- Objective: Complete PARTIAL-DEEP literature review on 电力电子化系统小干扰稳定分析方法.
+- Changed: Wrote plan, taxonomy, candidate pool, evidence matrix, method comparison, cited draft, final review, and provenance under slug `power-electronics-stability`.
+- Verified: Candidate pool produced 30 candidates; final disk checks run; source quality downgrades recorded for blocked alpha/IEEE/PDF paths.
+- Failed / learned: alpha search not logged in; IEEE API returned 403; subagent runtime failed before verifier/reviewer; several PDF parsers failed, so final remains PARTIAL-DEEP.
+- Next: If stronger evidence is needed, rerun with IEEE/full-text access and subagent verifier after runtime fix.
