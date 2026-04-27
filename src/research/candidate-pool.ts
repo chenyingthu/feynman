@@ -28,6 +28,7 @@ export type CandidatePoolEntry = {
 	sourceQualityHint: "metadata" | "abstract" | "abstract+conclusion" | "full-text-sampled";
 	sourceSearchQueries: string[];
 	bestMatchingQuery?: string;
+	accessNotes: string[];
 	score: number;
 	scoreReasons: string[];
 };
@@ -126,6 +127,38 @@ function entryKey(entry: Pick<CandidatePoolEntry, "doi" | "title">): string {
 	return entry.doi ? `doi:${entry.doi}` : `title:${normalizeTitle(entry.title)}`;
 }
 
+function buildAccessNotes(entry: CandidatePoolEntry): string[] {
+	const notes: string[] = [];
+	if (entry.doi) {
+		notes.push(`DOI landing: https://doi.org/${entry.doi}`);
+	}
+	const landingPage = entry.oaLandingPageUrl ?? entry.url;
+	if (landingPage) {
+		notes.push(`Landing page: ${landingPage}`);
+	}
+	if (entry.oaPdfUrl) {
+		notes.push(`OA PDF candidate: ${entry.oaPdfUrl}; cite as read only after successful fetch/parse`);
+	}
+	if (entry.sourceQualityHint === "metadata") {
+		notes.push("Fallback if full text is blocked: metadata-only; avoid method/result claims until more text is read");
+	} else if (entry.sourceQualityHint === "abstract") {
+		notes.push("Fallback if full text is blocked: abstract-supported claims only");
+	} else if (entry.sourceQualityHint === "abstract+conclusion") {
+		notes.push("Fallback if full text is blocked: abstract/conclusion-level claims only");
+	}
+	if (notes.length === 0) {
+		notes.push("Access unresolved; mark blocked if no stable landing page or metadata source can be found");
+	}
+	return Array.from(new Set(notes));
+}
+
+function withAccessNotes(entry: CandidatePoolEntry): CandidatePoolEntry {
+	return {
+		...entry,
+		accessNotes: buildAccessNotes(entry),
+	};
+}
+
 function parseOpenAlexEntries(payload: unknown): CandidatePoolEntry[] {
 	const root = asRecord(payload);
 	return asArray(root?.results)
@@ -158,6 +191,7 @@ function parseOpenAlexEntries(payload: unknown): CandidatePoolEntry[] {
 				oaPdfUrl,
 				sourceQualityHint: isOpenAccess ? "abstract+conclusion" : "metadata",
 				sourceSearchQueries: [],
+				accessNotes: [],
 				score: 0,
 				scoreReasons: [],
 			};
@@ -191,6 +225,7 @@ function parseCrossrefEntries(payload: unknown): CandidatePoolEntry[] {
 				sourceApis: ["Crossref"],
 				sourceQualityHint: "metadata",
 				sourceSearchQueries: [],
+				accessNotes: [],
 				score: 0,
 				scoreReasons: [],
 			};
@@ -226,6 +261,7 @@ function parseIeeeEntries(payload: unknown): CandidatePoolEntry[] {
 				oaPdfUrl,
 				sourceQualityHint: asString(record.abstract) ? "abstract" : "metadata",
 				sourceSearchQueries: [],
+				accessNotes: [],
 				score: 0,
 				scoreReasons: [],
 			};
@@ -260,6 +296,7 @@ function parseSemanticScholarEntries(payload: unknown): CandidatePoolEntry[] {
 				oaPdfUrl,
 				sourceQualityHint: asString(record.abstract) ? "abstract" : "metadata",
 				sourceSearchQueries: [],
+				accessNotes: [],
 				score: 0,
 				scoreReasons: [],
 			};
@@ -294,6 +331,7 @@ function mergeEntries(entries: CandidatePoolEntry[]): CandidatePoolEntry[] {
 		existing.oaLandingPageUrl ??= entry.oaLandingPageUrl;
 		existing.oaPdfUrl ??= entry.oaPdfUrl;
 		existing.sourceSearchQueries = Array.from(new Set([...existing.sourceSearchQueries, ...entry.sourceSearchQueries]));
+		existing.accessNotes = Array.from(new Set([...existing.accessNotes, ...entry.accessNotes]));
 		if (existing.sourceQualityHint === "metadata" && entry.sourceQualityHint !== "metadata") {
 			existing.sourceQualityHint = entry.sourceQualityHint;
 		}
@@ -438,6 +476,7 @@ export async function buildCandidatePool(query: string, options: {
 	const merged = mergeEntries(entries);
 	await enrichWithUnpaywall(merged, config, fetchImpl);
 	const scored = merged
+		.map(withAccessNotes)
 		.map((entry) => scoreEntry(entry, searchQueries))
 		.sort((left, right) => right.score - left.score || (right.citedByCount ?? 0) - (left.citedByCount ?? 0))
 		.slice(0, options.limit ?? 30)
@@ -497,6 +536,10 @@ export function formatCandidatePoolMarkdown(pool: CandidatePool): string {
 	lines.push("", "## Links", "");
 	for (const entry of pool.entries) {
 		lines.push(`- ${entry.id}: ${entry.url ?? entry.oaLandingPageUrl ?? entry.oaPdfUrl ?? "no URL"}${entry.oaPdfUrl ? ` (OA PDF: ${entry.oaPdfUrl})` : ""}`);
+	}
+	lines.push("", "## Access Fallback Notes", "");
+	for (const entry of pool.entries) {
+		lines.push(`- ${entry.id}: ${entry.accessNotes.join(" | ")}`);
 	}
 	return `${lines.join("\n")}\n`;
 }

@@ -29,6 +29,7 @@ If the parent frames the task as a verification pass rather than a venue-style p
   - notation drift, inconsistent terminology, or conclusions that use stronger language than the evidence warrants
   - "verified" or "confirmed" statements that do not actually show the check that was performed
 - Distinguish between fatal issues, strong concerns, and polish issues.
+- In verification-pass mode, classify each weakness as fixable or residual. A fixable issue is one where the draft can be corrected by deleting an unsupported claim, weakening wording, moving a citation, replacing a weak source, adding a source-quality downgrade, or marking a DOI/PDF/source as blocked. A residual issue is one that cannot be resolved with the available evidence or access.
 - Preserve uncertainty. If the draft might pass depending on venue norms, say so explicitly.
 - Keep looking after you find the first major problem. Do not stop at one issue if others remain visible.
 
@@ -60,6 +61,13 @@ Overall assessment and confidence score. Would this pass at [venue]?
 ## Revision Plan
 Prioritized, concrete steps to address each weakness.
 ```
+
+For every FATAL or MAJOR weakness, include:
+- **Fixability:** fixable or residual
+- **Suggested fix:** a concrete edit, deletion, source substitution, source-quality downgrade, or access-failure disclosure
+- **Verification check:** a targeted read, citation check, DOI/source lookup, or on-disk `rg`/`grep` check that would prove the fix landed
+
+If DOI, PDF, publisher, or paywall access is the root problem, do not require direct PDF access as the only acceptable fix. Accept stable fallbacks such as DOI landing pages, publisher abstracts, OpenAlex/Crossref metadata, Unpaywall OA locations, Semantic Scholar records, author repositories, institutional repositories, or explicit source-quality downgrade to `abstract`, `metadata`, `snippet`, or `blocked`.
 
 ### Part 2: Inline Annotations
 

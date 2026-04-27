@@ -312,3 +312,21 @@ Use this file to track chronology, not release notes. Keep entries short, factua
 - Failed / learned: The Élysée homepage does not explicitly state the core claim, so it should not be used as sole evidence for capital status.
 - Blockers: None for the verifier brief; any stronger legal memo would still need a more direct constitutional/statutory basis if that specific question is asked.
 - Next: Promote the brief into the final output or downgrade/remove any claim that leans on the Élysée URL alone.
+
+### 2026-04-26 local — small-signal-stability
+
+- Objective: Complete deep literature review on 小干扰稳定分析方法 / small-signal stability analysis methods.
+- Changed: Wrote evidence matrix, method comparison, final review `outputs/small-signal-stability.md`, and provenance `outputs/small-signal-stability.provenance.md`; interrupted stalled researcher subagent and completed lead-agent synthesis.
+- Verified: Verifier found no FATAL issues and fixes were applied; reviewer passed final as PARTIAL-DEEP with residual limitations disclosed.
+- Failed / learned: Alpha search unavailable due to missing login; IEEE API/DOI/PDF extraction was partially blocked, so final status remains PARTIAL-DEEP.
+- Blockers: None for partial-deep delivery; full verification would require better IEEE/Elsevier/PDF access and more robust-method sources.
+- Next: Optional hardening pass: replace abstract/snippet sources with full-text verified IEEE/Elsevier records and add dedicated robust/Lyapunov/LMI sources.
+
+### 2026-04-27 local — lit-quality-loop
+
+- Objective: Improve Feynman's general literature-review quality loop without relying on IEEE Xplore.
+- Changed: Strengthened `/lit` so feasible MAJOR verification findings must be fixed or explicitly carried as residual issues; verifier/reviewer now require suggested fixes and verification checks; candidate pools now record DOI/OA/PDF access fallback notes and source-quality downgrading guidance.
+- Verified: Ran `node --import tsx --test tests/content-policy.test.ts`, `node --import tsx --test tests/research-candidate-pool.test.ts tests/research-apis.test.ts`, `npm run typecheck`, and `npm run build`.
+- Failed / learned: IEEE remains non-critical because DOI, OpenAlex/Crossref metadata, Unpaywall, Semantic Scholar, author/institution pages, and explicit source-quality downgrades are better default fallbacks.
+- Blockers: None for the prompt and candidate-pool hardening; end-to-end quality still depends on the runtime following the new fix loop.
+- Next: Run another full `feynman lit --deep` workflow when a fresh quality sample is needed, and inspect whether MAJOR findings now produce a revised candidate before delivery.

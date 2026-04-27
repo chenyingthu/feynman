@@ -278,7 +278,45 @@ test("buildCandidatePool merges API records and enriches OA locations", async ()
 	assert.equal(first.openAccess, true);
 	assert.equal(first.oaPdfUrl, "https://oa.example.org/scenario.pdf");
 	assert.equal(first.sourceQualityHint, "abstract+conclusion");
+	assert.match(first.accessNotes.join("\n"), /DOI landing: https:\/\/doi\.org\/10\.1234\/scenario/);
+	assert.match(first.accessNotes.join("\n"), /OA PDF candidate: https:\/\/oa\.example\.org\/scenario\.pdf/);
+	assert.match(first.accessNotes.join("\n"), /cite as read only after successful fetch\/parse/);
 	assert.ok(first.score > pool.entries[1].score);
+});
+
+test("buildCandidatePool records metadata fallback notes when full text is unavailable", async () => {
+	function metadataFetch(input: string | URL | Request): Promise<Response> {
+		const url = input instanceof URL ? input : new URL(String(input));
+		if (url.hostname === "api.openalex.org") {
+			return Promise.resolve({
+				ok: true,
+				json: async () => ({
+					results: [
+						{
+							title: "Metadata only stability paper",
+							publication_year: 2024,
+							doi: "https://doi.org/10.1234/metadata",
+							primary_location: { landing_page_url: "https://example.org/metadata" },
+							open_access: { is_oa: false },
+						},
+					],
+				}),
+			} as Response);
+		}
+		if (url.hostname === "api.crossref.org") {
+			return Promise.resolve({ ok: true, json: async () => ({ message: { items: [] } }) } as Response);
+		}
+		throw new Error(`Unexpected URL ${url}`);
+	}
+
+	const pool = await buildCandidatePool("metadata only stability", {
+		config: { openAlexEmail: "user@example.com", crossrefMailto: "user@example.com" },
+		fetch: metadataFetch as typeof fetch,
+	});
+
+	assert.equal(pool.entries[0].sourceQualityHint, "metadata");
+	assert.match(pool.entries[0].accessNotes.join("\n"), /metadata-only/);
+	assert.match(pool.entries[0].accessNotes.join("\n"), /avoid method\/result claims/);
 });
 
 test("buildCandidatePool ranks Chinese title relevance above unrelated OA metadata", async () => {
@@ -405,6 +443,8 @@ test("formatCandidatePoolMarkdown writes candidate table and OA links", async ()
 	assert.match(markdown, /Power system scenario generation for renewable integration/);
 	assert.match(markdown, /OpenAlex\+Crossref\+Unpaywall|Crossref\+OpenAlex\+Unpaywall|OpenAlex\+Unpaywall\+Crossref/);
 	assert.match(markdown, /https:\/\/oa\.example\.org\/scenario\.pdf/);
+	assert.match(markdown, /## Access Fallback Notes/);
+	assert.match(markdown, /cite as read only after successful fetch\/parse/);
 });
 
 test("writeCandidatePoolFile writes outputs/.drafts/<slug>-candidate-pool.md", async () => {

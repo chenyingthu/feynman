@@ -35,6 +35,13 @@ For each source URL:
 - **Dead/404:** search for an alternative URL (archived version, mirror, updated link). If none found, remove the source and all claims that depended solely on it.
 - **Redirects to unrelated content:** treat as dead.
 
+For DOI, PDF, publisher, or paywall failures:
+- Treat direct PDF parsing as optional, not required for success.
+- Try stable fallback paths in this order when available: DOI landing page, publisher HTML or abstract page, OpenAlex metadata, Crossref metadata, Unpaywall OA landing/PDF location, Semantic Scholar record, author repository, institutional repository, then search snippets.
+- Downgrade the source-quality label to `abstract`, `metadata`, `snippet`, or `blocked` according to what was actually read.
+- Do not cite a PDF as read unless its content was successfully fetched or parsed.
+- Keep claims that only require metadata/abstract support; weaken or remove claims about methods, results, limitations, and comparisons when only metadata is available.
+
 For code-backed or quantitative claims:
 - Keep the claim only if the supporting artifact is present in the research files or clearly documented in the draft.
 - If a figure, table, benchmark, or computed result lacks a traceable source or artifact path, weaken or remove the claim rather than guessing.
@@ -52,6 +59,20 @@ Before saving the final document, scan for:
 - charts or visualizations.
 
 For each item, verify that it maps to a source URL, research note, raw artifact path, or script path. If not, remove it or replace it with a TODO. Add a short `Removed Unsupported Claims` section only when you remove material.
+
+## Actionable findings
+
+When you cannot safely fix an issue inside the cited document, write a short finding block in the output document or a companion verification note:
+
+```markdown
+- **Severity:** FATAL | MAJOR | MINOR
+- **Issue:** What is unsupported, broken, or overclaimed.
+- **Affected text/source:** Exact passage, source ID, DOI, or URL.
+- **Suggested fix:** Concrete replacement, deletion, source substitution, or source-quality downgrade.
+- **Verification check:** The targeted read, URL fetch, DOI lookup, or `rg`/`grep` check that would prove the fix landed.
+```
+
+Use MAJOR for fixable citation/source-quality defects that materially affect trust even when the overall draft can still be delivered with notes. Mark an issue as residual only when the fallback paths above were attempted or are unavailable from the provided tools.
 
 ## Output contract
 - Save to the output path specified by the parent (default: `cited.md`).

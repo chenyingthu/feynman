@@ -169,16 +169,42 @@ test("lit workflow enforces evidence-driven quality gates", () => {
 	assert.match(litPrompt, /metadata, abstract, conclusion\/discussion\/limitations, method overview, evaluation metrics/i);
 	assert.match(litPrompt, /800-1500 words/i);
 	assert.match(litPrompt, /Do not carry the whole long page forward/i);
+	assert.match(litPrompt, /DOI and Access Fallbacks/i);
+	assert.match(litPrompt, /Do not make IEEE Xplore or direct PDF access a hard dependency/i);
+	assert.match(litPrompt, /Downgrade source quality to `abstract`, `metadata`, or `blocked`/i);
+	assert.match(litPrompt, /Do not cite a PDF as read unless its content was fetched or parsed successfully/i);
 	assert.match(litPrompt, /outputs\/\.drafts\/<slug>-taxonomy\.md/i);
 	assert.match(litPrompt, /feynman research candidate-pool/i);
 	assert.match(litPrompt, /outputs\/\.drafts\/<slug>-candidate-pool\.md/i);
 	assert.match(litPrompt, /outputs\/\.drafts\/<slug>-evidence-matrix\.md/i);
 	assert.match(litPrompt, /outputs\/\.drafts\/<slug>-method-comparison\.md/i);
 	assert.match(litPrompt, /Write the draft from the taxonomy and evidence matrix, not from memory/i);
+	assert.match(litPrompt, /Apply feasible MAJOR fixes before final delivery/i);
+	assert.match(litPrompt, /outputs\/\.drafts\/<slug>-revised\.md/i);
+	assert.match(litPrompt, /run targeted on-disk verification/i);
+	assert.match(litPrompt, /Provenance may only claim an issue was fixed when this post-edit verification passed/i);
+	assert.match(litPrompt, /residual FATAL\/MAJOR\/MINOR issues/i);
 	assert.match(litPrompt, /quality-gate status/i);
 	assert.match(litPrompt, /candidate pool status/i);
 	assert.match(litPrompt, /source quality counts/i);
 	assert.match(litPrompt, /verify on disk that the final output, provenance sidecar, plan, taxonomy, and evidence matrix exist/i);
+});
+
+test("verifier and reviewer require actionable source fallback fixes", () => {
+	const verifierPrompt = readFileSync(join(repoRoot, ".feynman", "agents", "verifier.md"), "utf8");
+	const reviewerPrompt = readFileSync(join(repoRoot, ".feynman", "agents", "reviewer.md"), "utf8");
+
+	assert.match(verifierPrompt, /For DOI, PDF, publisher, or paywall failures/i);
+	assert.match(verifierPrompt, /OpenAlex metadata, Crossref metadata, Unpaywall OA landing\/PDF location/i);
+	assert.match(verifierPrompt, /Do not cite a PDF as read unless its content was successfully fetched or parsed/i);
+	assert.match(verifierPrompt, /\*\*Suggested fix:\*\*/i);
+	assert.match(verifierPrompt, /\*\*Verification check:\*\*/i);
+
+	assert.match(reviewerPrompt, /classify each weakness as fixable or residual/i);
+	assert.match(reviewerPrompt, /\*\*Fixability:\*\*/i);
+	assert.match(reviewerPrompt, /\*\*Suggested fix:\*\*/i);
+	assert.match(reviewerPrompt, /\*\*Verification check:\*\*/i);
+	assert.match(reviewerPrompt, /do not require direct PDF access as the only acceptable fix/i);
 });
 
 test("review workflow must write final artifacts instead of stopping after planning", () => {
