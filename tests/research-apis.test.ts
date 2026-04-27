@@ -46,6 +46,7 @@ test("loadResearchApiConfig reads research-apis.env without requiring process en
 			"CROSSREF_MAILTO=user@example.com",
 			"UNPAYWALL_EMAIL=user@example.com",
 			"IEEE_XPLORE_API_KEY=ieee-secret",
+			"FIRECRAWL_API_KEY=firecrawl-secret",
 			"",
 		].join("\n"),
 		"utf8",
@@ -58,6 +59,7 @@ test("loadResearchApiConfig reads research-apis.env without requiring process en
 	assert.equal(config.crossrefMailto, "user@example.com");
 	assert.equal(config.unpaywallEmail, "user@example.com");
 	assert.equal(config.ieeeXploreApiKey, "ieee-secret");
+	assert.equal(config.firecrawlApiKey, "firecrawl-secret");
 });
 
 test("summarizeResearchApiStatus reports configured providers without exposing secret values", () => {
@@ -67,14 +69,17 @@ test("summarizeResearchApiStatus reports configured providers without exposing s
 		crossrefMailto: "user@example.com",
 		unpaywallEmail: "user@example.com",
 		ieeeXploreApiKey: "ieee-secret",
+		firecrawlApiKey: "firecrawl-secret",
 	});
 
 	assert.equal(status.find((provider) => provider.name === "openalex")?.configured, true);
 	assert.equal(status.find((provider) => provider.name === "crossref")?.configured, true);
 	assert.equal(status.find((provider) => provider.name === "unpaywall")?.configured, true);
 	assert.equal(status.find((provider) => provider.name === "ieee-xplore")?.configured, true);
+	assert.equal(status.find((provider) => provider.name === "firecrawl")?.configured, true);
 	assert.equal(JSON.stringify(status).includes("openalex-secret"), false);
 	assert.equal(JSON.stringify(status).includes("ieee-secret"), false);
+	assert.equal(JSON.stringify(status).includes("firecrawl-secret"), false);
 });
 
 test("printResearchStatus never prints API keys", () => {
@@ -86,6 +91,7 @@ test("printResearchStatus never prints API keys", () => {
 			"OPENALEX_API_KEY=openalex-secret",
 			"OPENALEX_EMAIL=user@example.com",
 			"IEEE_XPLORE_API_KEY=ieee-secret",
+			"FIRECRAWL_API_KEY=firecrawl-secret",
 			"",
 		].join("\n"),
 		"utf8",
@@ -95,8 +101,10 @@ test("printResearchStatus never prints API keys", () => {
 
 	assert.match(output, /OpenAlex: configured/);
 	assert.match(output, /IEEE Xplore: configured/);
+	assert.match(output, /Firecrawl: configured/);
 	assert.doesNotMatch(output, /openalex-secret/);
 	assert.doesNotMatch(output, /ieee-secret/);
+	assert.doesNotMatch(output, /firecrawl-secret/);
 });
 
 test("handleResearchCommand rejects missing candidate-pool query", async () => {

@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 
 import { getResearchApisEnvPath } from "../config/paths.js";
 
-export type ResearchApiName = "openalex" | "semantic-scholar" | "crossref" | "unpaywall" | "ieee-xplore" | "elsevier";
+export type ResearchApiName = "openalex" | "semantic-scholar" | "crossref" | "unpaywall" | "ieee-xplore" | "elsevier" | "firecrawl";
 
 export type ResearchApiConfig = {
 	openAlexApiKey?: string;
@@ -12,6 +12,8 @@ export type ResearchApiConfig = {
 	unpaywallEmail?: string;
 	ieeeXploreApiKey?: string;
 	elsevierApiKey?: string;
+	firecrawlApiKey?: string;
+	firecrawlApiUrl?: string;
 };
 
 export type ResearchApiStatus = {
@@ -31,6 +33,8 @@ const ENV_KEY_MAP: Record<keyof ResearchApiConfig, string> = {
 	unpaywallEmail: "UNPAYWALL_EMAIL",
 	ieeeXploreApiKey: "IEEE_XPLORE_API_KEY",
 	elsevierApiKey: "ELSEVIER_API_KEY",
+	firecrawlApiKey: "FIRECRAWL_API_KEY",
+	firecrawlApiUrl: "FIRECRAWL_API_URL",
 };
 
 function parseEnvFile(contents: string): Record<string, string> {
@@ -66,6 +70,8 @@ export function loadResearchApiConfig(envPath = getResearchApisEnvPath(), env: N
 		unpaywallEmail: read("unpaywallEmail"),
 		ieeeXploreApiKey: read("ieeeXploreApiKey"),
 		elsevierApiKey: read("elsevierApiKey"),
+		firecrawlApiKey: read("firecrawlApiKey"),
+		firecrawlApiUrl: read("firecrawlApiUrl"),
 	};
 }
 
@@ -106,6 +112,12 @@ export function summarizeResearchApiStatus(config = loadResearchApiConfig()): Re
 			label: "Elsevier",
 			configured: Boolean(config.elsevierApiKey),
 			detail: config.elsevierApiKey ? "api key configured" : "missing",
+		},
+		{
+			name: "firecrawl",
+			label: "Firecrawl",
+			configured: Boolean(config.firecrawlApiKey),
+			detail: config.firecrawlApiKey ? "api key configured" : "missing",
 		},
 	];
 }
@@ -216,4 +228,35 @@ export async function searchSemanticScholarPapers(query: string, options: {
 	const config = options.config ?? loadResearchApiConfig();
 	const request = buildSemanticScholarSearchRequest(query, config);
 	return fetchJson(options.fetch ?? fetch, request.url, { headers: request.headers });
+}
+
+export async function searchFirecrawl(query: string, options: {
+	config?: ResearchApiConfig;
+	fetch?: ResearchApiFetch;
+	limit?: number;
+} = {}): Promise<unknown> {
+	const config = options.config ?? loadResearchApiConfig();
+	if (!config.firecrawlApiKey) {
+		throw new Error("Firecrawl API key is not configured");
+	}
+	const apiBase = config.firecrawlApiUrl ?? "https://api.firecrawl.dev";
+	const url = new URL("/v2/search", apiBase.endsWith("/") ? apiBase : `${apiBase}/`);
+	const response = await (options.fetch ?? fetch)(url, {
+		method: "POST",
+		headers: {
+			"content-type": "application/json",
+			authorization: `Bearer ${config.firecrawlApiKey}`,
+		},
+		body: JSON.stringify({
+			query,
+			limit: options.limit ?? 10,
+			sources: ["web"],
+			categories: ["research"],
+			integration: "cli",
+		}),
+	});
+	if (!response.ok) {
+		throw new Error(`Research API request failed (${response.status}) for ${url.origin}${url.pathname}`);
+	}
+	return response.json() as Promise<unknown>;
 }

@@ -5,6 +5,7 @@ import {
 	loadResearchApiConfig,
 	lookupUnpaywallDoi,
 	searchCrossrefWorks,
+	searchFirecrawl,
 	searchIeeeXplore,
 	searchOpenAlexWorks,
 	searchSemanticScholarPapers,
@@ -25,7 +26,7 @@ export type CandidatePoolEntry = {
 	openAccess?: boolean;
 	oaLandingPageUrl?: string;
 	oaPdfUrl?: string;
-	sourceQualityHint: "metadata" | "abstract" | "abstract+conclusion" | "full-text-sampled";
+	sourceQualityHint: "metadata" | "snippet" | "abstract" | "abstract+conclusion" | "full-text-sampled";
 	sourceSearchQueries: string[];
 	bestMatchingQuery?: string;
 	accessNotes: string[];
@@ -139,8 +140,13 @@ function buildAccessNotes(entry: CandidatePoolEntry): string[] {
 	if (entry.oaPdfUrl) {
 		notes.push(`OA PDF candidate: ${entry.oaPdfUrl}; cite as read only after successful fetch/parse`);
 	}
+	for (const note of entry.accessNotes) {
+		notes.push(note);
+	}
 	if (entry.sourceQualityHint === "metadata") {
 		notes.push("Fallback if full text is blocked: metadata-only; avoid method/result claims until more text is read");
+	} else if (entry.sourceQualityHint === "snippet") {
+		notes.push("Fallback if full text is blocked: search-snippet-supported discovery only; fetch before making content claims");
 	} else if (entry.sourceQualityHint === "abstract") {
 		notes.push("Fallback if full text is blocked: abstract-supported claims only");
 	} else if (entry.sourceQualityHint === "abstract+conclusion") {
@@ -304,6 +310,32 @@ function parseSemanticScholarEntries(payload: unknown): CandidatePoolEntry[] {
 		.filter((entry): entry is CandidatePoolEntry => Boolean(entry));
 }
 
+function parseFirecrawlEntries(payload: unknown): CandidatePoolEntry[] {
+	const root = asRecord(payload);
+	const data = asRecord(root?.data) ?? root;
+	return asArray(data?.web)
+		.map((item, index): CandidatePoolEntry | undefined => {
+			const record = asRecord(item);
+			const title = asString(record?.title);
+			const url = asString(record?.url);
+			if (!record || !title) return undefined;
+			return {
+				id: `FC${index + 1}`,
+				title,
+				year: asYear(record.description),
+				url,
+				authors: [],
+				sourceApis: ["Firecrawl"],
+				sourceQualityHint: "snippet",
+				sourceSearchQueries: [],
+				accessNotes: [asString(record.description) ? `Firecrawl snippet: ${asString(record.description)}` : "Firecrawl search result only; fetch before making content claims"],
+				score: 0,
+				scoreReasons: [],
+			};
+		})
+		.filter((entry): entry is CandidatePoolEntry => Boolean(entry));
+}
+
 function tagEntriesWithSearchQuery(entries: CandidatePoolEntry[], searchQuery: string): CandidatePoolEntry[] {
 	return entries.map((entry) => ({
 		...entry,
@@ -395,6 +427,10 @@ function scoreEntry(entry: CandidatePoolEntry, relevanceQueries: string[]): Cand
 		score += 1;
 		reasons.push("semantic-scholar");
 	}
+	if (entry.sourceApis.includes("Firecrawl")) {
+		score += 1;
+		reasons.push("firecrawl");
+	}
 	return {
 		...entry,
 		bestMatchingQuery: relevance.score > 0 ? relevance.query : undefined,
@@ -469,6 +505,15 @@ export async function buildCandidatePool(query: string, options: {
 				entries.push(...tagEntriesWithSearchQuery(parseSemanticScholarEntries(semanticScholarResult[0].value), searchQuery));
 			} else {
 				warnings.push(`Semantic Scholar unavailable for "${searchQuery}": ${semanticScholarResult[0].reason instanceof Error ? semanticScholarResult[0].reason.message : String(semanticScholarResult[0].reason)}`);
+			}
+		}
+
+		if (config.firecrawlApiKey) {
+			const firecrawlResult = await Promise.allSettled([searchFirecrawl(searchQuery, { config, fetch: fetchImpl })]);
+			if (firecrawlResult[0].status === "fulfilled") {
+				entries.push(...tagEntriesWithSearchQuery(parseFirecrawlEntries(firecrawlResult[0].value), searchQuery));
+			} else {
+				warnings.push(`Firecrawl unavailable for "${searchQuery}": ${firecrawlResult[0].reason instanceof Error ? firecrawlResult[0].reason.message : String(firecrawlResult[0].reason)}`);
 			}
 		}
 	}

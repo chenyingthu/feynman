@@ -140,6 +140,55 @@ test("buildCandidatePool includes IEEE Xplore and Semantic Scholar candidates wh
 	assert.match(pool.entries[0].scoreReasons.join(","), /semantic-scholar/);
 });
 
+test("buildCandidatePool includes Firecrawl research search results when configured", async () => {
+	function firecrawlFetch(input: string | URL | Request, init?: RequestInit): Promise<Response> {
+		const url = input instanceof URL ? input : new URL(String(input));
+		if (url.hostname === "api.openalex.org") {
+			return Promise.resolve({ ok: true, json: async () => ({ results: [] }) } as Response);
+		}
+		if (url.hostname === "api.crossref.org") {
+			return Promise.resolve({ ok: true, json: async () => ({ message: { items: [] } }) } as Response);
+		}
+		if (url.hostname === "api.firecrawl.dev") {
+			assert.equal(init?.method, "POST");
+			assert.equal((init?.headers as Record<string, string>)?.authorization, "Bearer firecrawl-secret");
+			assert.equal(JSON.parse(String(init?.body)).categories[0], "research");
+			return Promise.resolve({
+				ok: true,
+				json: async () => ({
+					success: true,
+					data: {
+						web: [
+							{
+								title: "Small-Signal Stability Criteria in Power Electronics-Dominated Systems",
+								url: "https://ieeexplore.ieee.org/document/10355078/",
+								description: "Various mature methods analyze small-signal stability of PEDPSs.",
+								category: "research",
+							},
+						],
+					},
+				}),
+			} as Response);
+		}
+		throw new Error(`Unexpected URL ${url}`);
+	}
+
+	const pool = await buildCandidatePool("power electronics small signal stability", {
+		config: {
+			openAlexEmail: "user@example.com",
+			crossrefMailto: "user@example.com",
+			firecrawlApiKey: "firecrawl-secret",
+		},
+		fetch: firecrawlFetch as typeof fetch,
+	});
+
+	assert.equal(pool.entries.length, 1);
+	assert.equal(pool.entries[0].sourceApis.includes("Firecrawl"), true);
+	assert.equal(pool.entries[0].sourceQualityHint, "snippet");
+	assert.match(pool.entries[0].scoreReasons.join(","), /firecrawl/);
+	assert.match(formatCandidatePoolMarkdown(pool), /Firecrawl snippet/);
+});
+
 test("buildCandidatePool merges results from multiple taxonomy-derived search queries", async () => {
 	const seenSearches: string[] = [];
 	function multiQueryFetch(input: string | URL | Request): Promise<Response> {

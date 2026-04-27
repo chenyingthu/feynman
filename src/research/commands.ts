@@ -22,6 +22,7 @@ export function printResearchStatus(envPath = getResearchApisEnvPath()): void {
 	printInfo("  SEMANTIC_SCHOLAR_API_KEY");
 	printInfo("  CROSSREF_MAILTO, UNPAYWALL_EMAIL");
 	printInfo("  IEEE_XPLORE_API_KEY, ELSEVIER_API_KEY");
+	printInfo("  FIRECRAWL_API_KEY, FIRECRAWL_API_URL");
 }
 
 function slugify(value: string): string {
