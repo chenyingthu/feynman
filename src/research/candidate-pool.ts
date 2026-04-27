@@ -44,6 +44,9 @@ export type CandidatePool = {
 
 type UnknownRecord = Record<string, unknown>;
 
+export const DEFAULT_CANDIDATE_POOL_LIMIT = 80;
+const DEFAULT_UNPAYWALL_ENRICHMENT_LIMIT = 50;
+
 function asRecord(value: unknown): UnknownRecord | undefined {
 	return value && typeof value === "object" ? value as UnknownRecord : undefined;
 }
@@ -441,7 +444,7 @@ function scoreEntry(entry: CandidatePoolEntry, relevanceQueries: string[]): Cand
 
 async function enrichWithUnpaywall(entries: CandidatePoolEntry[], config: ResearchApiConfig, fetchImpl?: ResearchApiFetch): Promise<void> {
 	if (!config.unpaywallEmail) return;
-	const doiEntries = entries.filter((entry) => entry.doi).slice(0, 20);
+	const doiEntries = entries.filter((entry) => entry.doi).slice(0, DEFAULT_UNPAYWALL_ENRICHMENT_LIMIT);
 	const results = await Promise.allSettled(
 		doiEntries.map((entry) => lookupUnpaywallDoi(entry.doi!, { config, fetch: fetchImpl })),
 	);
@@ -524,7 +527,7 @@ export async function buildCandidatePool(query: string, options: {
 		.map(withAccessNotes)
 		.map((entry) => scoreEntry(entry, searchQueries))
 		.sort((left, right) => right.score - left.score || (right.citedByCount ?? 0) - (left.citedByCount ?? 0))
-		.slice(0, options.limit ?? 30)
+		.slice(0, options.limit ?? DEFAULT_CANDIDATE_POOL_LIMIT)
 		.map((entry, index) => ({ ...entry, id: `C${index + 1}` }));
 
 	return {

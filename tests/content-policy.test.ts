@@ -155,9 +155,14 @@ test("lit workflow enforces evidence-driven quality gates", () => {
 	const litPrompt = readFileSync(join(repoRoot, "prompts", "lit.md"), "utf8");
 
 	assert.match(litPrompt, /quick literature scan/i);
-	assert.match(litPrompt, /Deep review target: at least 20 candidate sources considered/i);
-	assert.match(litPrompt, /at least 12 accepted sources/i);
+	assert.match(litPrompt, /Deep review target: at least 60 candidate sources considered/i);
+	assert.match(litPrompt, /at least 25 accepted sources/i);
 	assert.match(litPrompt, /source quality/i);
+	assert.match(litPrompt, /Scholarly Output Standard/i);
+	assert.match(litPrompt, /formal literature review article/i);
+	assert.match(litPrompt, /title, abstract, keywords, introduction, scope and review method, taxonomy/i);
+	assert.match(litPrompt, /complete `References` section/i);
+	assert.match(litPrompt, /Every accepted source must appear in a final `References` section/i);
 	assert.match(litPrompt, /full-text/i);
 	assert.match(litPrompt, /abstract\+conclusion/i);
 	assert.match(litPrompt, /full-text-sampled/i);
@@ -175,6 +180,7 @@ test("lit workflow enforces evidence-driven quality gates", () => {
 	assert.match(litPrompt, /Do not cite a PDF as read unless its content was fetched or parsed successfully/i);
 	assert.match(litPrompt, /outputs\/\.drafts\/<slug>-taxonomy\.md/i);
 	assert.match(litPrompt, /feynman research candidate-pool/i);
+	assert.match(litPrompt, /limit=80/i);
 	assert.match(litPrompt, /outputs\/\.drafts\/<slug>-candidate-pool\.md/i);
 	assert.match(litPrompt, /outputs\/\.drafts\/<slug>-evidence-matrix\.md/i);
 	assert.match(litPrompt, /outputs\/\.drafts\/<slug>-method-comparison\.md/i);
@@ -186,8 +192,10 @@ test("lit workflow enforces evidence-driven quality gates", () => {
 	assert.match(litPrompt, /residual FATAL\/MAJOR\/MINOR issues/i);
 	assert.match(litPrompt, /quality-gate status/i);
 	assert.match(litPrompt, /candidate pool status/i);
+	assert.match(litPrompt, /reference-list completeness status/i);
 	assert.match(litPrompt, /source quality counts/i);
 	assert.match(litPrompt, /verify on disk that the final output, provenance sidecar, plan, taxonomy, and evidence matrix exist/i);
+	assert.match(litPrompt, /every accepted evidence-matrix source appears in the final References/i);
 });
 
 test("verifier and reviewer require actionable source fallback fixes", () => {

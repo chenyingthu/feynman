@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -110,7 +110,7 @@ test("printResearchStatus never prints API keys", () => {
 test("handleResearchCommand rejects missing candidate-pool query", async () => {
 	await assert.rejects(
 		() => handleResearchCommand("candidate-pool", []),
-		/Usage: feynman research candidate-pool \[slug=<slug>\] \[query=<search-query> \.\.\.\] <topic>/,
+		/Usage: feynman research candidate-pool \[slug=<slug>\] \[limit=<n>\] \[query=<search-query> \.\.\.\] <topic>/,
 	);
 });
 
@@ -187,6 +187,38 @@ test("handleResearchCommand accepts taxonomy-derived candidate-pool search queri
 	assert.ok(calls.includes("main topic"));
 	assert.ok(calls.includes("method family"));
 	assert.ok(calls.includes("object family"));
+});
+
+test("handleResearchCommand accepts explicit candidate-pool limit", async () => {
+	const root = mkdtempSync(join(tmpdir(), "feynman-research-command-"));
+	const originalFetch = globalThis.fetch;
+	globalThis.fetch = (async (input: string | URL | Request) => {
+		const url = input instanceof URL ? input : new URL(String(input));
+		if (url.hostname === "api.openalex.org") {
+			return {
+				ok: true,
+				json: async () => ({
+					results: Array.from({ length: 8 }, (_, index) => ({
+						title: `Power electronics stability candidate ${index + 1}`,
+						doi: `https://doi.org/10.1234/limited-${index + 1}`,
+						primary_location: { landing_page_url: `https://example.org/limited-${index + 1}` },
+					})),
+				}),
+			} as Response;
+		}
+		if (url.hostname === "api.crossref.org") {
+			return { ok: true, json: async () => ({ message: { items: [] } }) } as Response;
+		}
+		throw new Error(`Unexpected URL ${url}`);
+	}) as typeof fetch;
+	try {
+		await handleResearchCommand("candidate-pool", ["slug=limited-slug", "limit=3", "power", "electronics"], root);
+	} finally {
+		globalThis.fetch = originalFetch;
+	}
+
+	const output = readFileSync(join(root, "outputs", ".drafts", "limited-slug-candidate-pool.md"), "utf8");
+	assert.match(output, /- Candidates: 3/);
 });
 
 test("research API URL builders include polite metadata and auth in the right place", () => {

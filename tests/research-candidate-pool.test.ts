@@ -4,7 +4,12 @@ import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { buildCandidatePool, formatCandidatePoolMarkdown, writeCandidatePoolFile } from "../src/research/candidate-pool.js";
+import {
+	DEFAULT_CANDIDATE_POOL_LIMIT,
+	buildCandidatePool,
+	formatCandidatePoolMarkdown,
+	writeCandidatePoolFile,
+} from "../src/research/candidate-pool.js";
 
 const openAlexPayload = {
 	results: [
@@ -67,6 +72,39 @@ function fakeFetch(input: string | URL | Request): Promise<Response> {
 	}
 	throw new Error(`Unexpected URL ${url}`);
 }
+
+test("buildCandidatePool keeps the expanded default candidate limit", async () => {
+	function manyOpenAlexFetch(input: string | URL | Request): Promise<Response> {
+		const url = input instanceof URL ? input : new URL(String(input));
+		if (url.hostname === "api.openalex.org") {
+			return Promise.resolve({
+				ok: true,
+				json: async () => ({
+					results: Array.from({ length: DEFAULT_CANDIDATE_POOL_LIMIT + 10 }, (_, index) => ({
+						title: `Power electronics small signal stability candidate ${index + 1}`,
+						publication_year: 2024,
+						doi: `https://doi.org/10.1234/candidate-${index + 1}`,
+						cited_by_count: DEFAULT_CANDIDATE_POOL_LIMIT + 10 - index,
+						primary_location: { landing_page_url: `https://example.org/candidate-${index + 1}` },
+						open_access: { is_oa: false },
+					})),
+				}),
+			} as Response);
+		}
+		if (url.hostname === "api.crossref.org") {
+			return Promise.resolve({ ok: true, json: async () => ({ message: { items: [] } }) } as Response);
+		}
+		throw new Error(`Unexpected URL ${url}`);
+	}
+
+	const pool = await buildCandidatePool("power electronics small signal stability", {
+		config: { openAlexEmail: "user@example.com", crossrefMailto: "user@example.com" },
+		fetch: manyOpenAlexFetch as typeof fetch,
+	});
+
+	assert.equal(DEFAULT_CANDIDATE_POOL_LIMIT, 80);
+	assert.equal(pool.entries.length, DEFAULT_CANDIDATE_POOL_LIMIT);
+});
 
 test("buildCandidatePool includes IEEE Xplore and Semantic Scholar candidates when configured", async () => {
 	function multiProviderFetch(input: string | URL | Request): Promise<Response> {
