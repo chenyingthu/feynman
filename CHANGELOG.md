@@ -4,6 +4,59 @@ Workspace lab notebook for long-running or resumable research work.
 
 Use this file to track chronology, not release notes. Keep entries short, factual, and operational.
 
+### 2026-04-27 11:59 +0800 — lit-artifact-guard
+
+- Objective: Prevent `/lit` deep reviews from silently stopping after intermediate evidence artifacts.
+- Changed: Added a `/lit` manifest artifact contract, a CLI-side final artifact guard, one automatic recovery pass that asks Pi to synthesize missing final/provenance artifacts from existing durable files, blocked-artifact fallback files when recovery still fails, and mtime validation so stale final artifacts from an older same-slug run cannot satisfy the guard.
+- Verified: `node --import tsx --test tests/lit-artifact-guard.test.ts tests/content-policy.test.ts`; `npm run typecheck`; `npm run build`; controlled `node bin/feynman.js ... lit lit recovery cli test` run wrote only intermediate artifacts first, triggered automatic recovery, then produced `outputs/lit-recovery-cli-test.md`, `outputs/lit-recovery-cli-test.provenance.md`, and manifest `status: done` / `currentStage: deliver`; real same-slug retest exposed stale final/provenance false-positive risk and led to the mtime guard.
+- Failed / learned: The observed failure was a model stop before final file writes, not a research API crash; runtime artifact checks are needed in addition to prompt instructions.
+- Blockers: None for the recovery mechanism; substantive review quality still depends on source coverage and evidence artifacts.
+- Next: Retest a real `/lit --deep` topic and inspect whether the final report/provenance are always delivered even if the first Pi pass stops early.
+
+### 2026-04-28 00:00 +0800 — lit-artifact-guard-review-fixes
+
+- Objective: Fix review findings in the `/lit` artifact recovery guard.
+- Changed: Non-zero Pi exits no longer skip `/lit` artifact inspection when fresh manifest/plan state can identify the slug; such runs can now trigger recovery or blocked fallback. Added `.omx/`, `.codex`, and `progress.md` to `.gitignore` to avoid committing local agent runtime state.
+- Verified: `node --import tsx --test tests/lit-artifact-guard.test.ts tests/content-policy.test.ts`; `npm run typecheck`; `npm run build`; `git diff --check`.
+- Failed / learned: Non-zero child exits can still leave useful durable artifacts, so exit status alone is not enough to decide whether recovery is impossible.
+- Next: Keep real `/lit` retests focused on whether final/provenance are written after abnormal exits as well as normal model stops.
+
+### 2026-04-28 11:59 +0800 — fulltext-fetch
+
+- Objective: Add a safe full-text acquisition path for literature reviews without aggressive crawling or publisher-control bypass.
+- Changed: Added `feynman research fulltext-fetch` to parse candidate pools, enrich DOI candidates through Unpaywall, slowly download OA PDFs, extract sampled text with `pdftotext` when available, write full-text logs/extracts/browser queues, and append `full-text-sampled` updates to evidence matrices. The parser now supports both generated `C1` candidate tables and grouped hand-authored tables such as `R1/S1/I1`.
+- Verified: `node --import tsx --test tests/research-fulltext-fetch.test.ts tests/research-apis.test.ts tests/research-candidate-pool.test.ts`; `node --import tsx --test tests/lit-artifact-guard.test.ts tests/content-policy.test.ts`; `npm run typecheck`; `npm run build`; `npm test`; `node bin/feynman.js research fulltext-fetch slug=pe-small-signal-stability limit=5 delay-ms=0 dry-run=true`.
+- Failed / learned: The first CLI smoke used `--dry-run`, but top-level parsing reserves unknown dash options unless passed after `--`; the supported CLI-safe form is `dry-run=true`. The first real dry-run also found that old hand-authored candidate pools needed broader table parsing.
+- Blockers: Real publisher PDFs still depend on legal OA URLs or human-supervised campus-network browser access; this command does not bypass SSO, captchas, paywalls, or anti-bot controls.
+- Next: Run a small non-dry-run OA-only fetch on a selected review slug, then feed `*-fulltext-extracts.md` into the `/lit` synthesis stage.
+
+### 2026-04-28 12:05 +0800 — fulltext-fetch-direct-pdf
+
+- Objective: Ensure full-text PDF downloads use the machine/campus-network IP instead of inherited proxy settings.
+- Changed: PDF downloads now use a dedicated undici `Agent` dispatcher rather than the process-global fetch dispatcher, so Pi's global `EnvHttpProxyAgent` does not affect PDF retrieval. Metadata APIs still use the existing fetch path.
+- Verified: Added a local HTTP PDF test proving `runFullTextFetch` can download without calling `globalThis.fetch`; `node --import tsx --test tests/research-fulltext-fetch.test.ts`; `npm run typecheck`; `npm run build`; `npm test`.
+- Failed / learned: The first implementation passed behavior tests but failed TypeScript because undici and DOM `Response` types differ; the final code keeps the direct PDF fetch type local and narrow.
+- Blockers: None for direct OA PDF downloads; browser-assisted downloads still depend on the browser/network profile the user chooses.
+- Next: Use non-dry-run `fulltext-fetch` on a small OA-only batch when ready.
+
+### 2026-04-28 14:45 +0800 — fulltext-oa-campus-split
+
+- Objective: Keep OA papers on the automatic/proxy-capable fetch path and reserve the browser/campus session for non-OA papers only.
+- Changed: Split full-text fetch results into automatic OA retry/preview queue versus browser/manual campus queue; browser queue files now contain only non-OA campus-needed entries; `fulltext-session` prefers the fetch-generated browser queue when present so DOI candidates later identified by Unpaywall as OA are not sent to the user workflow.
+- Verified: `npm run typecheck`; `npm run test:e2e`; `npm run test`; `npm run build`; real `feynman research fulltext-fetch slug=power-system-scenario-generation limit=12 delay-ms=0 timeout-ms=60000` downloaded 12 PDFs with 0 automatic retry items and 0 browser/manual campus items; real `fulltext-session` on `host=0.0.0.0 port=48173` returned `/api/state` with `candidates: 0`.
+- Failed / learned: The earlier 10s real fetch was too impatient for OA downloads and incorrectly suggested user/campus help; the product boundary should be OA automatic retry first, non-OA human campus help only.
+- Blockers: None for the tested 12-candidate topic; non-OA candidates still require user/browser access when the generated campus queue is non-empty.
+- Next: Feed `outputs/.drafts/power-system-scenario-generation-fulltext-extracts.md` into the next `/lit --deep` synthesis/review pass.
+
+### 2026-04-29 08:10 +0800 — fulltext-review-fixes
+
+- Objective: Fix review findings in the full-text acquisition changes.
+- Changed: Top-level parsing now stops at the first real command and passes workflow flags through, so topics like `feynman lit research methods --deep` are not rewritten as `research`; `fulltext-session` now restores existing import records from `<slug>-fulltext-session.md` instead of rewriting them as empty on resume; PDF direct downloads now use Node built-in `http`/`https` with `agent: false` instead of importing undeclared `undici`.
+- Verified: `node --import tsx --test tests/model-harness.test.ts tests/research-fulltext-session.test.ts tests/research-fulltext-fetch.test.ts`; `npm run typecheck`; `npm run build`; `npm test`; `npm run test:e2e`.
+- Failed / learned: A narrower fix for only `research` still let workflow flags such as `--deep` hit the top-level parser; all command-local arguments need to be preserved after the first positional command.
+- Blockers: None for the reviewed issues.
+- Next: Continue with a real browser-assisted session only after the user chooses a non-OA-heavy topic/slug.
+
 ## Entry template
 
 ### YYYY-MM-DD HH:MM TZ — [slug or objective]
@@ -348,3 +401,46 @@ Use this file to track chronology, not release notes. Keep entries short, factua
 - Verified: Candidate pool produced 30 candidates; final disk checks run; source quality downgrades recorded for blocked alpha/IEEE/PDF paths.
 - Failed / learned: alpha search not logged in; IEEE API returned 403; subagent runtime failed before verifier/reviewer; several PDF parsers failed, so final remains PARTIAL-DEEP.
 - Next: If stronger evidence is needed, rerun with IEEE/full-text access and subagent verifier after runtime fix.
+
+## 2026-04-27 — power-electronics-stability literature review
+- Completed deep literature review artifacts for 电力电子化系统小干扰稳定分析方法 under slug `power-electronics-stability`.
+- Candidate pool generated 80 records; IEEE API 403 warnings and alpha login blocker recorded; continued with DOI/source-page/web/subagent evidence.
+- Accepted 32 sources; wrote taxonomy, evidence matrix, method comparison, cited/revised review, verification, and provenance.
+- Reviewer found no fatal issues; major issues were fixed and post-fix citation verifier reported no remaining issues.
+- Next recommended step: if an equation-level or publication-grade version is needed, manually fetch paywalled IEEE full texts for metadata-only impedance/passivity/harmonic sources and upgrade source-quality labels.
+
+### 2026-04-27 local — lit-narrative-writing-standard
+
+- Objective: Incorporate the user's Perplexity-style deep research writing logic into Feynman's general `/lit` workflow without copying incompatible source-number or no-references rules.
+- Changed: Added `Narrative and Technical Writing Standard`, `Source Selection and Gap-Directed Search`, `Applied Research Logic`, and optional `Knowledge Roadmap` guidance to `prompts/lit.md`, emphasizing opening synthesis, heading discipline, prose-before-tables, cross-source narrative synthesis, engineering object/boundary/criteria framing, cautious AI/ML claims, useful equations only, gap-directed follow-up queries, real-object/real-need/real-contradiction/real-solution analysis, and a final scan for notebook-like artifacts.
+- Verified: Ran `node --import tsx --test tests/content-policy.test.ts`, `npm run typecheck`, and `npm run build`.
+- Failed / learned: The Perplexity prompts have useful writing, source-prioritization, roadmap, and engineering-logic discipline, but their "never include References", search-result-index citation assumptions, fixed 10,000-word target, and power-systems-specific venue hierarchy cannot be copied directly into Feynman's general evidence-matrix workflow.
+- Next: Retest `/lit --deep` on a fresh topic to see whether the final report becomes more article-like rather than note-like.
+
+### 2026-04-27 11:25 local — pe-systems-small-signal-stability
+
+- Objective: Start deep literature review on small-signal stability analysis methods for power-electronic-dominated systems.
+- Changed: Created plan and taxonomy artifacts with mode=deep and method-family search axes.
+- Verified: Plan and taxonomy were written to the expected slugged paths.
+- Failed / learned: None yet.
+- Blockers: Candidate-pool and evidence gathering still pending.
+- Next: Run candidate-pool command, then gather broad paper evidence.
+
+### 2026-04-29 08:39 +0800 — fulltext-e2e-acquisition
+
+- Objective: End-to-end test the new literature full-text acquisition path from candidate discovery through OA fetch, browser-assisted non-OA upload, parsing, and evidence reuse.
+- Changed: Fixed candidate-pool fallback-note parsing so browser/manual queue rows keep real DOI URLs instead of the literal word `DOI`; made `fulltext-fetch` and `fulltext-session` create a minimal evidence matrix when none exists yet; added `feynman research acquire <topic>` as a one-command wrapper for candidate-pool plus OA full-text fetch plus optional browser-upload session.
+- Verified: Ran `node bin/feynman.js research candidate-pool slug=e2e-stability-mini limit=8 query="small signal stability power electronics dominated systems review" "power electronics small signal stability methods"`, `node bin/feynman.js research fulltext-fetch slug=e2e-stability-mini limit=8 delay-ms=1000 timeout-ms=60000`, and `node bin/feynman.js research fulltext-session slug=e2e-stability-mini limit=2 port=18766`; OA fetch downloaded C1, browser queue listed DOI URLs for C3/C5/C6/C8, and upload simulation imported C3/C5 into extracts and evidence matrix.
+- Verified: Ran `node --import tsx --test tests/research-fulltext-fetch.test.ts tests/research-fulltext-session.test.ts tests/research-fulltext-e2e.test.ts tests/research-apis.test.ts`; `npm run typecheck`; `npm run build`; `npm test` (204/204 pass).
+- Failed / learned: IEEE Xplore still returned 403; Wiley direct OA PDFs returned 403 and one OSTI PDF request aborted, so those items correctly stayed in retry/manual queues rather than being cited as read.
+- Blockers: No blocker for the Feynman acquisition workflow; real non-OA content still requires human-supervised campus/browser download and upload.
+- Next: Run a full `/lit --deep` review with the generated `*-fulltext-extracts.md` and `*-evidence-matrix.md` available to confirm the writing stage upgrades source-quality labels in the final report.
+
+### 2026-04-29 09:06 +0800 — repl-acquire-command
+
+- Objective: Make the acquisition workflow usable from inside the Feynman interactive command environment, not only from the outer system CLI.
+- Changed: Registered `/acquire`, `/fulltext-session`, and `/fulltext-stop` extension commands. `/acquire` shells out to the Feynman CLI for candidate-pool and OA fetch, posts a result card in the REPL, and starts the browser-assisted upload server when manual queue items remain.
+- Verified: Added `tests/research-extension-commands.test.ts` to assert the REPL slash commands are registered and listed in metadata; ran `npm run typecheck`; `npm run build`; `npm test` (206/206 pass).
+- Failed / learned: The prior `research acquire ...` command was a top-level CLI command only; Pi REPL extension commands require explicit `pi.registerCommand(...)` registration.
+- Blockers: None for command registration. Long-running acquisition still depends on live metadata/OA endpoints and the user keeping the REPL session open while the upload server is active.
+- Next: Use `/acquire slug=<slug> limit=80 fetch-limit=40 <topic>` inside Feynman, then `/fulltext-stop` after uploads are complete.

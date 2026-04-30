@@ -49,6 +49,7 @@
     "start": "tsx src/index.ts",
     "start:dist": "node ./bin/feynman.js",
     "test": "node --import tsx --test --test-concurrency=1 tests/*.test.ts",
+    "test:e2e": "node --import tsx --test --test-concurrency=1 tests/research-fulltext-e2e.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [

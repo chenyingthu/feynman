@@ -35,10 +35,13 @@ export function readPromptSpecs(appRoot) {
 }
 
 export const extensionCommandSpecs = [
+	{ name: "acquire", args: "[slug=<slug>] [limit=<n>] [fetch-limit=<n>] <topic>", section: "Research Workflows", description: "Run candidate discovery, OA full-text fetch, and browser-assisted PDF upload from the REPL.", publicDocs: true },
 	{ name: "capabilities", args: "", section: "Project & Session", description: "Show installed packages, discovery entrypoints, and runtime capability counts.", publicDocs: true },
 	{ name: "commands", args: "", section: "Project & Session", description: "Browse all available slash commands, including built-in and package commands.", publicDocs: true },
 	{ name: "help", args: "", section: "Project & Session", description: "Show grouped Feynman commands and prefill the editor with a selected command.", publicDocs: true },
 	{ name: "feynman-model", args: "", section: "Project & Session", description: "Open Feynman model menu (main + per-subagent overrides).", publicDocs: true },
+	{ name: "fulltext-session", args: "slug=<slug> [limit=<n>] [port=<n>]", section: "Research Workflows", description: "Start the browser-assisted full-text upload page for an existing acquisition slug.", publicDocs: true },
+	{ name: "fulltext-stop", args: "", section: "Research Workflows", description: "Stop the active full-text upload page.", publicDocs: true },
 	{ name: "init", args: "", section: "Project & Session", description: "Bootstrap AGENTS.md and session-log folders for a research project.", publicDocs: true },
 	{ name: "outputs", args: "", section: "Project & Session", description: "Browse all research artifacts (papers, outputs, experiments, notes).", publicDocs: true },
 	{ name: "service-tier", args: "", section: "Project & Session", description: "View or set the provider service tier override for supported models.", publicDocs: true },
@@ -81,6 +84,14 @@ export const cliCommandSections = [
 			{ usage: "feynman setup preview", description: "Install or verify preview dependencies." },
 			{ usage: "feynman doctor", description: "Diagnose config, auth, Pi runtime, and preview dependencies." },
 			{ usage: "feynman status", description: "Show the current setup summary." },
+		],
+	},
+	{
+		title: "Research Acquisition",
+		commands: [
+			{ usage: "feynman acquire [slug=<slug>] [limit=<n>] <topic>", description: "Run candidate discovery and OA full-text fetch." },
+			{ usage: "feynman fulltext-session slug=<slug>", description: "Start browser-assisted upload session." },
+			{ usage: "feynman fulltext-stop", description: "Stop the active upload session." },
 		],
 	},
 	{
@@ -129,7 +140,30 @@ export const legacyFlags = [
 	{ usage: "--setup-preview", description: "Alias for `feynman setup preview`." },
 ];
 
-export const topLevelCommandNames = ["alpha", "chat", "doctor", "help", "model", "packages", "search", "setup", "status", "update"];
+export const topLevelCommandNames = [
+	"alpha",
+	"chat",
+	"doctor",
+	"help",
+	"model",
+	"packages",
+	"search",
+	"setup",
+	"status",
+	"update",
+	// Extension commands (also available as CLI commands)
+	"acquire",
+	"fulltext-session",
+	"fulltext-stop",
+	"init",
+	"outputs",
+	"service-tier",
+	"capabilities",
+	"commands",
+	"tools",
+	"feynman-model",
+	"test",
+];
 
 export function formatSlashUsage(command) {
 	return `/${command.name}${command.args ? ` ${command.args}` : ""}`;

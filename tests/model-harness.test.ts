@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { appendWorkflowFlagPositionals, resolveInitialPrompt, resolvePiPromptOptions, resolveThinkingConfig, shouldRunInteractiveSetup } from "../src/cli.js";
+import { appendWorkflowFlagPositionals, parseTopLevelArgs, resolveInitialPrompt, resolvePiPromptOptions, resolveThinkingConfig, shouldRunInteractiveSetup } from "../src/cli.js";
 import { buildModelStatusSnapshotFromRecords, chooseRecommendedModel, getAvailableModelRecords } from "../src/model/catalog.js";
 import { resolveModelProviderForCommand, setDefaultModelSpec } from "../src/model/commands.js";
 import { createModelRegistry } from "../src/model/registry.js";
@@ -236,6 +236,30 @@ test("appendWorkflowFlagPositionals preserves summarize CLI flags parsed after p
 		["paper.md", "--window-size", "2000", "--overlap", "200", "--tier1-threshold", "8000", "--tier2-threshold", "20000"],
 	);
 	assert.deepEqual(appendWorkflowFlagPositionals("review", ["paper.md"], { "window-size": "2000" }), ["paper.md"]);
+});
+
+test("parseTopLevelArgs passes research subcommand flags through", () => {
+	assert.deepEqual(
+		parseTopLevelArgs(["--cwd", "/tmp/work", "research", "fulltext-fetch", "slug=foo", "--dry-run", "--assisted-browser", "--delay-ms", "0"]),
+		{
+			values: { cwd: "/tmp/work" },
+			positionals: ["research", "fulltext-fetch", "slug=foo", "--dry-run", "--assisted-browser", "--delay-ms", "0"],
+		},
+	);
+	assert.throws(
+		() => parseTopLevelArgs(["--dry-run", "unknown"]),
+		/Unknown option '--dry-run'/,
+	);
+});
+
+test("parseTopLevelArgs preserves workflow topics containing research", () => {
+	assert.deepEqual(
+		parseTopLevelArgs(["lit", "research", "methods", "--deep"]),
+		{
+			values: {},
+			positionals: ["lit", "research", "methods", "--deep"],
+		},
+	);
 });
 
 test("resolveThinkingConfig only passes launch thinking when explicitly configured", () => {

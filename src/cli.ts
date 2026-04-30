@@ -47,6 +47,7 @@ import { setupPreviewDependencies } from "./setup/preview.js";
 import { runSetup } from "./setup/setup.js";
 import { ASH, printAsciiHeader, printInfo, printPanel, printSection, RESET, SAGE } from "./ui/terminal.js";
 import { createModelRegistry } from "./model/registry.js";
+import { buildLitArtifactRecoveryPrompt, runLitArtifactGuard } from "./workflows/lit-artifact-guard.js";
 import {
 	cliCommandSections,
 	formatCliWorkflowUsage,
@@ -56,6 +57,56 @@ import {
 } from "../metadata/commands.mjs";
 
 const TOP_LEVEL_COMMANDS = new Set(topLevelCommandNames);
+const TOP_LEVEL_OPTION_NAMES = [
+	"cwd",
+	"doctor",
+	"help",
+	"version",
+	"alpha-login",
+	"alpha-logout",
+	"alpha-status",
+	"mode",
+	"model",
+	"new-session",
+	"prompt",
+	"service-tier",
+	"session-dir",
+	"setup-preview",
+	"tier1-threshold",
+	"tier2-threshold",
+	"thinking",
+	"overlap",
+	"window-size",
+] as const;
+
+const TOP_LEVEL_PARSE_OPTIONS = {
+	cwd: { type: "string" },
+	doctor: { type: "boolean" },
+	help: { type: "boolean" },
+	version: { type: "boolean" },
+	"alpha-login": { type: "boolean" },
+	"alpha-logout": { type: "boolean" },
+	"alpha-status": { type: "boolean" },
+	mode: { type: "string" },
+	model: { type: "string" },
+	"new-session": { type: "boolean" },
+	prompt: { type: "string" },
+	"service-tier": { type: "string" },
+	"session-dir": { type: "string" },
+	"setup-preview": { type: "boolean" },
+	"tier1-threshold": { type: "string" },
+	"tier2-threshold": { type: "string" },
+	thinking: { type: "string" },
+	overlap: { type: "string" },
+	"window-size": { type: "string" },
+} as const;
+
+type TopLevelParseValues = Partial<Record<typeof TOP_LEVEL_OPTION_NAMES[number], string | boolean>>;
+
+type TopLevelParseResult = {
+	values: TopLevelParseValues;
+	positionals: string[];
+};
 
 function printHelpLine(usage: string, description: string): void {
 	const width = 30;
@@ -447,6 +498,53 @@ export function resolveThinkingConfig(rawValue: string | undefined): {
 	};
 }
 
+function optionTakesValue(name: string): boolean {
+	return TOP_LEVEL_PARSE_OPTIONS[name as keyof typeof TOP_LEVEL_PARSE_OPTIONS]?.type === "string";
+}
+
+function stringValue(values: TopLevelParseValues, key: keyof TopLevelParseValues): string | undefined {
+	const value = values[key];
+	return typeof value === "string" ? value : undefined;
+}
+
+function splitCommandArgsForTopLevelParse(args: string[]): { topLevelArgs: string[]; commandArgs: string[] } | undefined {
+	const topLevelArgs: string[] = [];
+	for (let index = 0; index < args.length; index += 1) {
+		const arg = args[index];
+		if (!arg.startsWith("-")) {
+			return {
+				topLevelArgs: [...topLevelArgs, arg],
+				commandArgs: args.slice(index + 1),
+			};
+		}
+		topLevelArgs.push(arg);
+		if (arg === "--") {
+			return undefined;
+		}
+		if (arg.startsWith("--")) {
+			const optionName = arg.slice(2).split("=", 1)[0];
+			if (optionTakesValue(optionName) && !arg.includes("=") && index + 1 < args.length) {
+				index += 1;
+				topLevelArgs.push(args[index]);
+			}
+		}
+	}
+	return undefined;
+}
+
+export function parseTopLevelArgs(args: string[]): TopLevelParseResult {
+	const commandSplit = splitCommandArgsForTopLevelParse(args);
+	const parsed = parseArgs({
+		args: commandSplit?.topLevelArgs ?? args,
+		allowPositionals: true,
+		options: TOP_LEVEL_PARSE_OPTIONS,
+	});
+	return {
+		values: Object.fromEntries(Object.entries(parsed.values)) as TopLevelParseValues,
+		positionals: commandSplit ? [parsed.positionals[0], ...commandSplit.commandArgs] : parsed.positionals,
+	};
+}
+
 export function shouldRunInteractiveSetup(
 	explicitModelSpec: string | undefined,
 	currentModelSpec: string | undefined,
@@ -476,31 +574,7 @@ export async function main(): Promise<void> {
 	ensureFeynmanHome(feynmanHome);
 	syncBundledAssets(appRoot, feynmanAgentDir);
 
-	const { values, positionals } = parseArgs({
-		args: process.argv.slice(2),
-		allowPositionals: true,
-		options: {
-			cwd: { type: "string" },
-			doctor: { type: "boolean" },
-			help: { type: "boolean" },
-			version: { type: "boolean" },
-			"alpha-login": { type: "boolean" },
-			"alpha-logout": { type: "boolean" },
-			"alpha-status": { type: "boolean" },
-			mode: { type: "string" },
-			model: { type: "string" },
-			"new-session": { type: "boolean" },
-			prompt: { type: "string" },
-			"service-tier": { type: "string" },
-			"session-dir": { type: "string" },
-			"setup-preview": { type: "boolean" },
-			"tier1-threshold": { type: "string" },
-			"tier2-threshold": { type: "string" },
-			thinking: { type: "string" },
-			overlap: { type: "string" },
-			"window-size": { type: "string" },
-		},
-	});
+	const { values, positionals } = parseTopLevelArgs(process.argv.slice(2));
 
 	if (values.help) {
 		printHelp(appRoot);
@@ -515,11 +589,19 @@ export async function main(): Promise<void> {
 		throw new Error("Unable to determine the installed Feynman version.");
 	}
 
-	const workingDir = resolve(values.cwd ?? process.cwd());
-	const sessionDir = resolve(values["session-dir"] ?? getDefaultSessionDir(feynmanHome));
+	const cwd = stringValue(values, "cwd");
+	const sessionDirValue = stringValue(values, "session-dir");
+	const thinking = stringValue(values, "thinking");
+	const prompt = stringValue(values, "prompt");
+	const model = stringValue(values, "model");
+	const serviceTier = stringValue(values, "service-tier");
+	const mode = stringValue(values, "mode");
+	const workingDir = resolve(cwd ?? process.cwd());
+	const workflowStartedAtMs = Date.now();
+	const sessionDir = resolve(sessionDirValue ?? getDefaultSessionDir(feynmanHome));
 	const feynmanSettingsPath = resolve(feynmanAgentDir, "settings.json");
 	const feynmanAuthPath = resolve(feynmanAgentDir, "auth.json");
-	const { defaultThinkingLevel, launchThinkingLevel } = resolveThinkingConfig(values.thinking ?? process.env.FEYNMAN_THINKING);
+	const { defaultThinkingLevel, launchThinkingLevel } = resolveThinkingConfig(thinking ?? process.env.FEYNMAN_THINKING);
 
 	normalizeFeynmanSettings(feynmanSettingsPath, bundledSettingsPath, defaultThinkingLevel, feynmanAuthPath);
 
@@ -619,6 +701,22 @@ export async function main(): Promise<void> {
 		return;
 	}
 
+	// Extension commands: direct CLI access (e.g., `feynman acquire` instead of `feynman research acquire`)
+	if (command === "acquire") {
+		await handleResearchCommand("acquire", rest, workingDir);
+		return;
+	}
+
+	if (command === "fulltext-fetch") {
+		await handleResearchCommand("fulltext-fetch", rest, workingDir);
+		return;
+	}
+
+	if (command === "fulltext-session") {
+		await handleResearchCommand("fulltext-session", rest, workingDir);
+		return;
+	}
+
 	if (command === "packages") {
 		await handlePackagesCommand(rest[0], rest.slice(1), workingDir, feynmanAgentDir);
 		return;
@@ -634,13 +732,12 @@ export async function main(): Promise<void> {
 		return;
 	}
 
-	const explicitModelSpec = values.model ?? process.env.FEYNMAN_MODEL;
-	const explicitServiceTier = normalizeServiceTier(values["service-tier"] ?? process.env.FEYNMAN_SERVICE_TIER);
-	const mode = values.mode;
+	const explicitModelSpec = model ?? process.env.FEYNMAN_MODEL;
+	const explicitServiceTier = normalizeServiceTier(serviceTier ?? process.env.FEYNMAN_SERVICE_TIER);
 	if (mode !== undefined && mode !== "text" && mode !== "json" && mode !== "rpc") {
 		throw new Error("Unknown mode. Use text, json, or rpc.");
 	}
-	if ((values["service-tier"] ?? process.env.FEYNMAN_SERVICE_TIER) && !explicitServiceTier) {
+	if ((serviceTier ?? process.env.FEYNMAN_SERVICE_TIER) && !explicitServiceTier) {
 		throw new Error("Unknown service tier. Use auto, default, flex, priority, or standard_only.");
 	}
 	if (explicitServiceTier) {
@@ -678,7 +775,7 @@ export async function main(): Promise<void> {
 
 	const workflowCommandNames = new Set(readPromptSpecs(appRoot).filter((s) => s.topLevelCli).map((s) => s.name));
 	const workflowRest = appendWorkflowFlagPositionals(command, rest, values);
-	const promptOptions = resolvePiPromptOptions(command, workflowRest, values.prompt, workflowCommandNames);
+	const promptOptions = resolvePiPromptOptions(command, workflowRest, prompt, workflowCommandNames);
 	await launchPiChat({
 		appRoot,
 		workingDir,
@@ -690,4 +787,55 @@ export async function main(): Promise<void> {
 		explicitModelSpec,
 		...promptOptions,
 	});
+	const litGuardResult = runLitArtifactGuard({
+		command,
+		rest: workflowRest,
+		workingDir,
+		exitCode: process.exitCode,
+		startedAtMs: workflowStartedAtMs,
+		writeBlockedArtifacts: false,
+	});
+	let finalLitGuardResult = litGuardResult;
+	if (litGuardResult.checked && !litGuardResult.ok && litGuardResult.recoverable) {
+		console.error(litGuardResult.message ?? "Literature review final artifacts are missing; attempting one automatic recovery pass.");
+		const recoveryPrompt = buildLitArtifactRecoveryPrompt(litGuardResult);
+		await launchPiChat({
+			appRoot,
+			workingDir,
+			sessionDir,
+			feynmanAgentDir,
+			feynmanVersion,
+			mode,
+			thinkingLevel: launchThinkingLevel,
+			explicitModelSpec,
+			oneShotPrompt: recoveryPrompt,
+		});
+		const recoveryExitCode = process.exitCode ?? 0;
+		finalLitGuardResult = runLitArtifactGuard({
+			command,
+			rest: workflowRest,
+			workingDir,
+			exitCode: 0,
+			startedAtMs: workflowStartedAtMs,
+			writeBlockedArtifacts: true,
+		});
+		if (finalLitGuardResult.ok && recoveryExitCode !== 0) {
+			process.exitCode = recoveryExitCode;
+		}
+	}
+	if (finalLitGuardResult.checked && !finalLitGuardResult.ok) {
+		if (finalLitGuardResult.message) {
+			console.error(finalLitGuardResult.message);
+		}
+		if (finalLitGuardResult.missing && finalLitGuardResult.missing.length > 0) {
+			console.error("Missing required lit artifacts:");
+			for (const missing of finalLitGuardResult.missing) {
+				console.error(`- ${missing}`);
+			}
+		}
+		if (finalLitGuardResult.blockedOutputPath) {
+			console.error(`Blocked artifact written: ${finalLitGuardResult.blockedOutputPath}`);
+		}
+		process.exitCode = 1;
+	}
 }
